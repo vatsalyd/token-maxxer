@@ -1,0 +1,32 @@
+# Environment & Secrets
+.env
+
+# Virtual environment
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testing
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Database
+*.sqlite3
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Project scaffold (never commit)
+token-maxxer-project-scaffold.md

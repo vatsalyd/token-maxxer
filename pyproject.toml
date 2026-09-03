@@ -1,0 +1,29 @@
+[project]
+name = "token-maxxer"
+version = "0.1.0"
+description = "Internal Discord workspace and project-management bot for the DSAI Club."
+requires-python = ">=3.12"
+dependencies = [
+    "discord.py>=2.3,<3.0",
+    "python-dotenv>=1.0,<2.0",
+    "aiosqlite>=0.19,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
