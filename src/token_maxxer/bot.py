@@ -50,7 +50,7 @@ class TokenMaxxer(discord.Client):
         """
         # Load cogs — will be added as extensions are built
         cog_extensions: list[str] = [
-            # "token_maxxer.cogs.utility",
+            "token_maxxer.cogs.utility",
             # "token_maxxer.cogs.setup",
             # "token_maxxer.cogs.projects",
             # "token_maxxer.cogs.teams",
