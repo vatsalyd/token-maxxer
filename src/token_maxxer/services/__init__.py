@@ -19,6 +19,12 @@ from token_maxxer.services.project_service import (
     ProjectValidationError,
     ProjectWorkspace,
 )
+from token_maxxer.services.team_service import (
+    TeamAuthorizationError,
+    TeamError,
+    TeamService,
+    TeamValidationError,
+)
 
 __all__ = [
     "GuildService",
@@ -31,7 +37,12 @@ __all__ = [
     "ProjectValidationError",
     "ProjectWorkspace",
     "ReconciliationReport",
+    "TeamAuthorizationError",
+    "TeamError",
+    "TeamService",
+    "TeamValidationError",
     "VerificationReport",
 ]
+
 
 
