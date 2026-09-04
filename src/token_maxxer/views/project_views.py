@@ -91,10 +91,24 @@ def build_project_card_embed(
             inline=False,
         )
 
+    if project.deadline:
+        embed.add_field(
+            name="Deadline",
+            value=f"⏳ `{project.deadline}`",
+            inline=True,
+        )
+
     if project.created_at:
         embed.add_field(
             name="Created",
             value=format_timestamp(project.created_at, style="D"),
+            inline=True,
+        )
+
+    if project.archived_at:
+        embed.add_field(
+            name="Archived",
+            value=format_timestamp(project.archived_at, style="D"),
             inline=True,
         )
 
@@ -247,6 +261,59 @@ def build_project_hub_embed(projects: list[Project]) -> discord.Embed:
         )
 
     embed.set_footer(text="Updated automatically • DSAI Club")
+    return embed
+
+
+def build_project_deadline_embed(
+    project: Project,
+    updated_by: discord.Member | None = None,
+) -> discord.Embed:
+    """Build an embed displaying or confirming a project deadline."""
+    status_emoji = STATUS_EMOJIS.get(project.status, "📁")
+    color = STATUS_COLORS.get(project.status, discord.Color.blurple())
+
+    title = f"⏳ Project Deadline — {project.name}"
+    deadline_text = f"**`{project.deadline}`**" if project.deadline else "*No deadline set*"
+
+    embed = make_embed(
+        title=title,
+        description=f"Current target deadline for **{project.name}**:\n\n{deadline_text}",
+        color=color,
+    )
+    embed.add_field(name="Status", value=f"{status_emoji} {project.status}", inline=True)
+    embed.add_field(name="Project Lead", value=f"<@{project.lead_id}>", inline=True)
+
+    if updated_by:
+        embed.add_field(name="Updated By", value=updated_by.mention, inline=False)
+
+    embed.set_footer(text=f"Project ID: {project.id} • DSAI Club")
+    return embed
+
+
+def build_project_archived_embed(
+    project: Project,
+    caller: discord.Member,
+) -> discord.Embed:
+    """Build an embed announcing project workspace archival."""
+    embed = make_embed(
+        title=f"📦 Project Archived: {project.name}",
+        description=(
+            f"The workspace for **{project.name}** has been permanently archived.\n\n"
+            f"• All project channels are set to **read-only** mode.\n"
+            f"• Project history and previous discussions are preserved.\n"
+            f"• Lifecycle status is now marked as **ARCHIVED**."
+        ),
+        color=discord.Color.dark_grey(),
+    )
+    embed.add_field(name="Project Lead", value=f"<@{project.lead_id}>", inline=True)
+    embed.add_field(name="Archived By", value=caller.mention, inline=True)
+    if project.archived_at:
+        embed.add_field(
+            name="Archived At",
+            value=format_timestamp(project.archived_at, style="F"),
+            inline=False,
+        )
+    embed.set_footer(text=f"Project ID: {project.id} • DSAI Club")
     return embed
 
 
@@ -508,4 +575,71 @@ class ProjectUpdateModal(discord.ui.Modal):
             log.exception("Failed to post project update for %s", self.project.id)
             err = error_embed(title="Update Failed", description=f"Could not save update: `{exc}`")
             await interaction.followup.send(embed=err, ephemeral=True)
+
+
+class ArchiveConfirmationView(discord.ui.View):
+    """Interactive confirmation view before archiving a project."""
+
+    def __init__(
+        self,
+        project: Project,
+        caller: discord.Member,
+        project_service: ProjectService,
+        timeout: float = 60.0,
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self.project = project
+        self.caller = caller
+        self.project_service = project_service
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.caller.id:
+            await interaction.response.send_message(
+                "❌ Only the member who initiated the archive command can confirm it.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Archive Workspace", style=discord.ButtonStyle.danger, emoji="📦")
+    async def confirm(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button[ArchiveConfirmationView],
+    ) -> None:
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        await interaction.response.defer()
+
+        try:
+            archived = await self.project_service.archive_project(
+                project_id=self.project.id,
+                guild=interaction.guild,
+                caller=self.caller,
+            )
+            embed = build_project_archived_embed(archived, self.caller)
+            await interaction.edit_original_response(
+                content="✅ **Project workspace has been archived.**",
+                embed=embed,
+                view=self,
+            )
+        except Exception as exc:
+            err = error_embed(title="Archive Failed", description=str(exc))
+            await interaction.followup.send(embed=err, ephemeral=True)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button[ArchiveConfirmationView],
+    ) -> None:
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        await interaction.response.edit_message(
+            content="❌ **Project archiving cancelled.**",
+            embed=None,
+            view=self,
+        )
 

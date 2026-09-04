@@ -376,19 +376,33 @@ class ProjectService:
         self,
         project_id: int,
         guild: discord.Guild | None = None,
+        caller: discord.Member | None = None,
     ) -> Project:
         """Archive a project and preserve workspace history.
 
-        Marks the database status as ARCHIVED and optionally restricts channel writes.
+        Marks the database status as ARCHIVED and restricts channel writes.
 
         Args:
             project_id: The project ID to archive.
             guild: Optional Discord guild to update category/channel permissions.
+            caller: Optional Discord member who initiated the archive.
 
         Returns:
             The archived Project model.
         """
-        project = await self.update_project_status(project_id, ProjectStatus.ARCHIVED)
+        project = await self.get_project(project_id)
+        if caller is not None:
+            can_archive = await self.can_change_status(caller, project)
+            if not can_archive:
+                raise ProjectError("You do not have permission to archive this project.")
+
+        archived_at = utcnow_iso()
+        await self.db.update_project_status(
+            project_id, ProjectStatus.ARCHIVED.value, archived_at=archived_at
+        )
+
+        project.status = ProjectStatus.ARCHIVED.value
+        project.archived_at = archived_at
 
         # If guild is provided and category exists, restrict write permissions
         if guild is not None and project.category_id is not None:
@@ -396,11 +410,18 @@ class ProjectService:
             if isinstance(category, discord.CategoryChannel):
                 try:
                     # Update category name with archive prefix
-                    archive_name = f"📦 ARCHIVED — {project.name.upper()}"
+                    archive_name = f"📦 ARCHIVED — {project.name.upper()}"[:100]
                     await category.edit(name=archive_name, reason="token-maxxer project archived")
 
                     # Revoke write permissions from all project channels
                     for ch in category.text_channels:
+                        for target, overwrite in list(ch.overwrites.items()):
+                            if (
+                                isinstance(target, discord.Member)
+                                and not target.guild_permissions.administrator
+                            ):
+                                overwrite.send_messages = False
+                                await ch.set_permissions(target, overwrite=overwrite)
                         await self.permission_service.apply_public_permissions(
                             ch, readonly=True
                         )
@@ -410,11 +431,85 @@ class ProjectService:
                         project.id,
                     )
 
+            # Post announcement to the project's announcements channel
+            ch_map = await self.db.get_channels(project.id)
+            ann_id = ch_map.get("announcements") or ch_map.get("team-chat")
+            if ann_id:
+                ann_ch = guild.get_channel(ann_id)
+                if isinstance(ann_ch, discord.TextChannel):
+                    caller_txt = caller.mention if caller else "an administrator"
+                    archived_msg = (
+                        f"📦 **Project Workspace Archived**\n"
+                        f"This project workspace has been archived by {caller_txt}.\n"
+                        f"All channels are preserved in read-only mode for reference."
+                    )
+                    with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                        await ann_ch.send(archived_msg)
+
+        log_action(
+            log,
+            action="archive_project",
+            result="success",
+            project_id=project_id,
+            user_id=caller.id if caller else None,
+        )
+
         return project
 
     async def complete_project(self, project_id: int) -> Project:
         """Mark a project as COMPLETED."""
         return await self.update_project_status(project_id, ProjectStatus.COMPLETED)
+
+    async def set_project_deadline(
+        self,
+        *,
+        guild: discord.Guild,
+        project_id: int,
+        deadline: str | None,
+        caller: discord.Member,
+    ) -> Project:
+        """Set or update the target deadline for a project."""
+        project = await self.get_project(project_id)
+        if not await self.can_change_status(caller, project):
+            raise ProjectError(
+                "Only the project lead, core members, coordinators, and admins "
+                "can update project deadlines."
+            )
+
+        clean_deadline = (
+            deadline.strip()
+            if deadline and deadline.strip().lower() not in ("none", "clear", "remove")
+            else None
+        )
+
+        await self.db.update_project_deadline(project_id, clean_deadline)
+        project.deadline = clean_deadline
+
+        # Notify project workspace
+        channels = await self.db.get_channels(project_id)
+        target_ch_id = channels.get("announcements") or channels.get("team-chat")
+        if target_ch_id:
+            target_ch = guild.get_channel(target_ch_id)
+            if isinstance(target_ch, discord.TextChannel):
+                msg = (
+                    f"⏳ **Project deadline updated to `{clean_deadline}`** by {caller.mention}."
+                    if clean_deadline
+                    else f"⏳ **Project deadline cleared** by {caller.mention}."
+                )
+                with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                    await target_ch.send(msg)
+
+        log_action(
+            log,
+            action="set_project_deadline",
+            result="success",
+            guild_id=guild.id,
+            project_id=project_id,
+            user_id=caller.id,
+            deadline=clean_deadline,
+        )
+
+        return project
 
     # ─── Update & Status Flow ─────────────────────────────────────────────────
 
@@ -548,7 +643,7 @@ class ProjectService:
         status_str = new_status.value if isinstance(new_status, ProjectStatus) else new_status
 
         if status_str == ProjectStatus.ARCHIVED.value:
-            return await self.archive_project(project_id, guild=guild)
+            return await self.archive_project(project_id, guild=guild, caller=caller)
 
         return await self.update_project_status(project_id, new_status)
 

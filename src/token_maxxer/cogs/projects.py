@@ -1,9 +1,13 @@
 """Projects cog — slash commands for project workspaces.
 
 Commands:
-    /project create — Open interactive modal to create a new project workspace.
-    /project list   — List projects in the server with optional status filter.
-    /project info   — View detailed project specifications, team, and progress.
+    /project create   — Open interactive modal to create a new project workspace.
+    /project list     — List projects in the server with optional status filter.
+    /project info     — View detailed project specifications, team, and progress.
+    /project update   — Post a structured milestone or progress update.
+    /project status   — Transition project lifecycle status.
+    /project archive  — Safely archive a project workspace to read-only.
+    /project deadline — View or set target completion deadlines.
 """
 
 from __future__ import annotations
@@ -23,8 +27,11 @@ from token_maxxer.utils.constants import ProjectStatus
 from token_maxxer.utils.helpers import error_embed, success_embed
 from token_maxxer.utils.logging import get_logger, log_action
 from token_maxxer.views.project_views import (
+    ArchiveConfirmationView,
     ProjectCreateModal,
     ProjectUpdateModal,
+    build_project_archived_embed,
+    build_project_deadline_embed,
     build_project_info_embed,
     build_project_list_embed,
 )
@@ -353,6 +360,192 @@ class Projects(
         except ProjectError as exc:
             err = error_embed(title="Status Change Failed", description=str(exc))
             await interaction.followup.send(embed=err, ephemeral=True)
+
+    # ─── /project archive ─────────────────────────────────────────────────────
+
+    @app_commands.command(
+        name="archive",
+        description="Archive a project workspace, locking channels to read-only mode.",
+    )
+    @app_commands.describe(
+        project="The project name or numeric ID to archive.",
+        force="Confirm and archive immediately without interactive confirmation prompt.",
+    )
+    @app_commands.autocomplete(project=project_autocomplete)
+    async def archive(
+        self,
+        interaction: discord.Interaction,
+        project: str,
+        force: bool = False,
+    ) -> None:
+        """Archive a project workspace."""
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "❌ Project archiving can only be performed inside a Discord server.",
+                ephemeral=True,
+            )
+            return
+
+        clean_input = project.strip()
+        project_id: int | None = None
+
+        if clean_input.isdigit():
+            project_id = int(clean_input)
+        else:
+            found = await self.project_service.db.get_project_by_name(
+                interaction.guild_id, clean_input
+            )
+            if found is not None:
+                project_id = found.id
+
+        if project_id is None:
+            err = error_embed(
+                title="Project Not Found",
+                description=f"Could not find project `{clean_input}`.",
+            )
+            await interaction.response.send_message(embed=err, ephemeral=True)
+            return
+
+        try:
+            proj = await self.project_service.get_project(project_id)
+            if not await self.project_service.can_change_status(interaction.user, proj):
+                await interaction.response.send_message(
+                    "❌ Only the project lead, core members, coordinators, or admins "
+                    "can archive this project.",
+                    ephemeral=True,
+                )
+                return
+
+            if proj.is_archived:
+                await interaction.response.send_message(
+                    f"ℹ️ Project **{proj.name}** is already archived.",
+                    ephemeral=True,
+                )
+                return
+
+            if force:
+                await interaction.response.defer()
+                archived = await self.project_service.archive_project(
+                    project_id=proj.id,
+                    guild=interaction.guild,
+                    caller=interaction.user,
+                )
+                embed = build_project_archived_embed(archived, interaction.user)
+                await interaction.followup.send(
+                    content="✅ **Project workspace has been archived.**",
+                    embed=embed,
+                )
+            else:
+                prompt_embed = error_embed(
+                    title=f"⚠️ Archive Project Workspace: {proj.name}?",
+                    description=(
+                        f"Are you sure you want to archive **{proj.name}**?\n\n"
+                        f"• All project channels will be changed to **read-only**.\n"
+                        f"• Write permissions will be revoked for all members.\n"
+                        f"• History and previous conversations will remain preserved."
+                    ),
+                )
+                view = ArchiveConfirmationView(
+                    project=proj,
+                    caller=interaction.user,
+                    project_service=self.project_service,
+                )
+                await interaction.response.send_message(
+                    embed=prompt_embed,
+                    view=view,
+                    ephemeral=True,
+                )
+
+        except ProjectError as exc:
+            err = error_embed(title="Archive Failed", description=str(exc))
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=err, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=err, ephemeral=True)
+
+    # ─── /project deadline ────────────────────────────────────────────────────
+
+    @app_commands.command(
+        name="deadline",
+        description="View or set the target completion deadline for a project.",
+    )
+    @app_commands.describe(
+        project="The project name or numeric ID.",
+        deadline="New deadline (e.g. '2026-12-31', 'End of Q4', or 'clear' to unset).",
+    )
+    @app_commands.autocomplete(project=project_autocomplete)
+    async def deadline(
+        self,
+        interaction: discord.Interaction,
+        project: str,
+        deadline: str | None = None,
+    ) -> None:
+        """View or update a project's completion deadline."""
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "❌ Project commands can only be used inside a Discord server.",
+                ephemeral=True,
+            )
+            return
+
+        clean_input = project.strip()
+        project_id: int | None = None
+
+        if clean_input.isdigit():
+            project_id = int(clean_input)
+        else:
+            found = await self.project_service.db.get_project_by_name(
+                interaction.guild_id, clean_input
+            )
+            if found is not None:
+                project_id = found.id
+
+        if project_id is None:
+            err = error_embed(
+                title="Project Not Found",
+                description=f"Could not find project `{clean_input}`.",
+            )
+            await interaction.response.send_message(embed=err, ephemeral=True)
+            return
+
+        try:
+            proj = await self.project_service.get_project(project_id)
+
+            # Query mode: view current deadline
+            if deadline is None:
+                embed = build_project_deadline_embed(proj)
+                await interaction.response.send_message(embed=embed)
+                return
+
+            # Update mode: requires authorization
+            if not await self.project_service.can_change_status(interaction.user, proj):
+                await interaction.response.send_message(
+                    "❌ Only the project lead, core members, coordinators, or admins "
+                    "can update project deadlines.",
+                    ephemeral=True,
+                )
+                return
+
+            await interaction.response.defer()
+            updated = await self.project_service.set_project_deadline(
+                guild=interaction.guild,
+                project_id=proj.id,
+                deadline=deadline,
+                caller=interaction.user,
+            )
+
+            embed = build_project_deadline_embed(updated, updated_by=interaction.user)
+            await interaction.followup.send(
+                content="✅ **Project deadline updated!**",
+                embed=embed,
+            )
+
+        except ProjectError as exc:
+            err = error_embed(title="Deadline Update Failed", description=str(exc))
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=err, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=err, ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

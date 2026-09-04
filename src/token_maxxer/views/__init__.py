@@ -3,9 +3,12 @@
 from token_maxxer.views.project_views import (
     STATUS_COLORS,
     STATUS_EMOJIS,
+    ArchiveConfirmationView,
     ProjectCreateModal,
     ProjectUpdateModal,
+    build_project_archived_embed,
     build_project_card_embed,
+    build_project_deadline_embed,
     build_project_hub_embed,
     build_project_info_embed,
     build_project_list_embed,
@@ -19,6 +22,7 @@ from token_maxxer.views.team_views import (
 )
 
 __all__ = [
+    "ArchiveConfirmationView",
     "STATUS_COLORS",
     "STATUS_EMOJIS",
     "ProjectCreateModal",
@@ -26,7 +30,9 @@ __all__ = [
     "build_lead_transferred_embed",
     "build_member_added_embed",
     "build_member_removed_embed",
+    "build_project_archived_embed",
     "build_project_card_embed",
+    "build_project_deadline_embed",
     "build_project_hub_embed",
     "build_project_info_embed",
     "build_project_list_embed",

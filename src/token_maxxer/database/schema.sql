@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS projects (
     status TEXT NOT NULL DEFAULT 'ACTIVE',
     category_id INTEGER,
     created_at TEXT NOT NULL,
-    archived_at TEXT
+    archived_at TEXT,
+    deadline TEXT
 );
 
 CREATE TABLE IF NOT EXISTS project_members (
