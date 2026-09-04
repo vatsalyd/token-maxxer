@@ -16,7 +16,6 @@ from enum import StrEnum
 
 import discord
 
-
 # ─── Project Status ───────────────────────────────────────────────────────────
 
 
@@ -295,3 +294,21 @@ PROJECT_CHANNEL_TYPES: dict[str, str] = {
 CHANNEL_PROJECT_HUB = "📌・project-hub"
 CHANNEL_PROJECT_IDEAS = "💡・project-ideas"
 CHANNEL_PROJECT_SHOWCASE = "🏆・project-showcase"
+
+# Channels where regular members can only view/read (cannot send messages)
+READONLY_CHANNELS: set[str] = {
+    "📜・rules",
+    "👋・welcome",
+    "🧭・server-guide",
+    "🎭・roles",
+    "📢・announcements",
+    "📌・project-hub",
+}
+
+# Role name constants for easy reference
+ROLE_ADMIN = "👑 Club Admin"
+ROLE_COORDINATOR = "⚡ Coordinator"
+ROLE_CORE_MEMBER = "🔧 Core Member"
+ROLE_PROJECT_LEAD = "🚀 Project Lead"
+ROLE_MEMBER = "👤 Member"
+
