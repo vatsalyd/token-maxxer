@@ -10,11 +10,28 @@ from token_maxxer.services.guild_service import (
     VerificationReport,
 )
 from token_maxxer.services.permission_service import PermissionService
+from token_maxxer.services.project_service import (
+    ProjectCreationError,
+    ProjectDetails,
+    ProjectError,
+    ProjectNotFoundError,
+    ProjectService,
+    ProjectValidationError,
+    ProjectWorkspace,
+)
 
 __all__ = [
     "GuildService",
     "PermissionService",
+    "ProjectCreationError",
+    "ProjectDetails",
+    "ProjectError",
+    "ProjectNotFoundError",
+    "ProjectService",
+    "ProjectValidationError",
+    "ProjectWorkspace",
     "ReconciliationReport",
     "VerificationReport",
 ]
+
 
