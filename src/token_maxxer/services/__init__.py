@@ -9,9 +9,12 @@ from token_maxxer.services.guild_service import (
     ReconciliationReport,
     VerificationReport,
 )
+from token_maxxer.services.permission_service import PermissionService
 
 __all__ = [
     "GuildService",
+    "PermissionService",
     "ReconciliationReport",
     "VerificationReport",
 ]
+
