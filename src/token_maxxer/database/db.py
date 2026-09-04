@@ -52,6 +52,8 @@ class Database:
             await conn.execute("PRAGMA foreign_keys = ON;")
             await conn.execute("PRAGMA journal_mode = WAL;")
             await conn.executescript(schema_sql)
+            with contextlib.suppress(Exception):
+                await conn.execute("ALTER TABLE projects ADD COLUMN deadline TEXT;")
             await conn.commit()
 
         self._initialized = True
@@ -83,6 +85,7 @@ class Database:
         tech_stack: str | None = None,
         status: str = ProjectStatus.ACTIVE.value,
         category_id: int | None = None,
+        deadline: str | None = None,
     ) -> Project:
         """Insert a new project and add the lead as a member."""
         created_at = utcnow_iso()
@@ -91,8 +94,8 @@ class Database:
                 """
                 INSERT INTO projects (
                     guild_id, name, description, tech_stack,
-                    lead_id, status, category_id, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    lead_id, status, category_id, created_at, deadline
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     guild_id,
@@ -103,6 +106,7 @@ class Database:
                     status,
                     category_id,
                     created_at,
+                    deadline,
                 ),
             )
             project_id = cursor.lastrowid
@@ -139,6 +143,7 @@ class Database:
             status=status,
             category_id=category_id,
             created_at=created_at,
+            deadline=deadline,
         )
 
     async def get_project(self, project_id: int) -> Project | None:
@@ -199,6 +204,18 @@ class Database:
             cursor = await conn.execute(
                 "UPDATE projects SET status = ?, archived_at = ? WHERE id = ?",
                 (status, archived_at, project_id),
+            )
+            await conn.commit()
+            return cursor.rowcount > 0
+
+    async def update_project_deadline(
+        self, project_id: int, deadline: str | None
+    ) -> bool:
+        """Update a project's target deadline."""
+        async with self.connect() as conn:
+            cursor = await conn.execute(
+                "UPDATE projects SET deadline = ? WHERE id = ?",
+                (deadline, project_id),
             )
             await conn.commit()
             return cursor.rowcount > 0
@@ -489,7 +506,9 @@ class Database:
 
     @staticmethod
     def _row_to_project(row: aiosqlite.Row) -> Project:
-        """Convert a database row to a Project model instance."""
+        deadline: str | None = None
+        with contextlib.suppress(KeyError, IndexError):
+            deadline = row["deadline"]
         return Project(
             id=row["id"],
             guild_id=row["guild_id"],
@@ -501,6 +520,7 @@ class Database:
             category_id=row["category_id"],
             created_at=row["created_at"],
             archived_at=row["archived_at"],
+            deadline=deadline,
         )
 
 

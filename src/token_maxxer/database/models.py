@@ -25,6 +25,7 @@ class Project:
         category_id: Discord CategoryChannel ID if provisioned.
         created_at: ISO 8601 UTC timestamp when created.
         archived_at: ISO 8601 UTC timestamp when archived, if applicable.
+        deadline: Optional deadline or target completion date.
     """
 
     id: int
@@ -37,6 +38,7 @@ class Project:
     category_id: int | None = None
     created_at: str = ""
     archived_at: str | None = None
+    deadline: str | None = None
 
     @property
     def is_active(self) -> bool:
