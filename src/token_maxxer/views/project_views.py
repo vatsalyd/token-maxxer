@@ -11,7 +11,7 @@ import contextlib
 
 import discord
 
-from token_maxxer.database.models import Project
+from token_maxxer.database.models import Project, ProjectUpdate
 from token_maxxer.services.project_service import (
     ProjectCreationError,
     ProjectDetails,
@@ -383,3 +383,129 @@ class ProjectCreateModal(discord.ui.Modal, title="Create Project Workspace"):
                 "❌ An error occurred processing your project proposal.",
                 ephemeral=True,
             )
+
+
+# ─── Project Update UI ────────────────────────────────────────────────────────
+
+
+def build_project_update_embed(
+    project: Project,
+    update: ProjectUpdate,
+    author: discord.Member,
+) -> discord.Embed:
+    """Build an embed presenting a weekly or milestone project progress update."""
+    embed = make_embed(
+        title=f"📝 Project Update — {project.name}",
+        description=f"Update submitted by {author.mention} for **{project.name}**.",
+        color=discord.Color.teal(),
+    )
+
+    if update.completed:
+        embed.add_field(name="✅ Completed", value=update.completed, inline=False)
+    if update.working_on:
+        embed.add_field(name="🔨 Working On", value=update.working_on, inline=False)
+    if update.blocked_by:
+        embed.add_field(name="⚠️ Blocked By", value=update.blocked_by, inline=False)
+    if update.next_steps:
+        embed.add_field(name="⏭️ Next Steps", value=update.next_steps, inline=False)
+
+    embed.set_footer(text=f"Project #{project.id} • Progress Log")
+    return embed
+
+
+class ProjectUpdateModal(discord.ui.Modal):
+    """Discord Modal for logging weekly or milestone project updates."""
+
+    completed = discord.ui.TextInput(
+        label="What was completed?",
+        style=discord.TextStyle.paragraph,
+        placeholder="Milestones achieved, features built, tasks finished...",
+        max_length=500,
+        required=False,
+    )
+
+    working_on = discord.ui.TextInput(
+        label="What are you currently working on?",
+        style=discord.TextStyle.paragraph,
+        placeholder="Active tasks and focus areas...",
+        max_length=500,
+        required=False,
+    )
+
+    blocked_by = discord.ui.TextInput(
+        label="Any blockers or challenges?",
+        style=discord.TextStyle.paragraph,
+        placeholder="Issues blocking progress, help required from peers/mentors...",
+        max_length=500,
+        required=False,
+    )
+
+    next_steps = discord.ui.TextInput(
+        label="What are the next steps?",
+        style=discord.TextStyle.paragraph,
+        placeholder="Planned deliverables for upcoming days/week...",
+        max_length=500,
+        required=False,
+    )
+
+    def __init__(
+        self,
+        project: Project,
+        project_service: ProjectService | None = None,
+    ) -> None:
+        title = f"Update — {project.name}"[:45]
+        super().__init__(title=title)
+        self.project = project
+        self.project_service = project_service or ProjectService()
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Handle submission of progress update."""
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "❌ Updates can only be submitted inside a Discord server.",
+                ephemeral=True,
+            )
+            return
+
+        c = self.completed.value.strip() or None
+        w = self.working_on.value.strip() or None
+        b = self.blocked_by.value.strip() or None
+        n = self.next_steps.value.strip() or None
+
+        if not any((c, w, b, n)):
+            await interaction.response.send_message(
+                "❌ Please fill out at least one field in the update.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        try:
+            update = await self.project_service.post_project_update(
+                guild=interaction.guild,
+                project_id=self.project.id,
+                author=interaction.user,
+                completed=c,
+                working_on=w,
+                blocked_by=b,
+                next_steps=n,
+            )
+
+            embed = build_project_update_embed(
+                project=self.project,
+                update=update,
+                author=interaction.user,
+            )
+
+            await interaction.followup.send(
+                content="✅ **Update logged successfully!**",
+                embed=embed,
+                ephemeral=True,
+            )
+
+        except Exception as exc:
+            log.exception("Failed to post project update for %s", self.project.id)
+            err = error_embed(title="Update Failed", description=f"Could not save update: `{exc}`")
+            await interaction.followup.send(embed=err, ephemeral=True)
+

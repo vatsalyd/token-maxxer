@@ -30,6 +30,9 @@ from token_maxxer.utils.constants import (
     PROJECT_CATEGORY_TEMPLATE,
     PROJECT_CHANNEL_TYPES,
     PROJECT_WORKSPACE_CHANNELS,
+    ROLE_ADMIN,
+    ROLE_COORDINATOR,
+    ROLE_CORE_MEMBER,
     ProjectStatus,
 )
 from token_maxxer.utils.helpers import utcnow_iso
@@ -412,3 +415,140 @@ class ProjectService:
     async def complete_project(self, project_id: int) -> Project:
         """Mark a project as COMPLETED."""
         return await self.update_project_status(project_id, ProjectStatus.COMPLETED)
+
+    # ─── Update & Status Flow ─────────────────────────────────────────────────
+
+    async def can_post_update(self, caller: discord.Member, project_id: int) -> bool:
+        """Check if caller has authorization to submit an update for the project."""
+        project = await self.get_project(project_id)
+        if caller.id == project.lead_id or caller.id == caller.guild.owner_id:
+            return True
+        if caller.guild_permissions.administrator:
+            return True
+        admin_roles = {
+            ROLE_ADMIN.strip().lower(),
+            ROLE_COORDINATOR.strip().lower(),
+            ROLE_CORE_MEMBER.strip().lower(),
+        }
+        user_roles = {r.name.strip().lower() for r in caller.roles}
+        if bool(user_roles & admin_roles):
+            return True
+        return await self.db.is_member(project_id, caller.id)
+
+    async def can_change_status(self, caller: discord.Member, project: Project) -> bool:
+        """Check if caller has authorization to update project status."""
+        if caller.id == project.lead_id or caller.id == caller.guild.owner_id:
+            return True
+        if caller.guild_permissions.administrator:
+            return True
+        admin_roles = {
+            ROLE_ADMIN.strip().lower(),
+            ROLE_COORDINATOR.strip().lower(),
+            ROLE_CORE_MEMBER.strip().lower(),
+        }
+        user_roles = {r.name.strip().lower() for r in caller.roles}
+        return bool(user_roles & admin_roles)
+
+    async def post_project_update(
+        self,
+        *,
+        guild: discord.Guild,
+        project_id: int,
+        author: discord.Member,
+        completed: str | None = None,
+        working_on: str | None = None,
+        blocked_by: str | None = None,
+        next_steps: str | None = None,
+    ) -> ProjectUpdate:
+        """Record and broadcast a project progress update.
+
+        Args:
+            guild: Discord guild.
+            project_id: Project ID.
+            author: Discord member submitting the update.
+            completed: Completed accomplishments.
+            working_on: Current tasks.
+            blocked_by: Obstacles/blockers.
+            next_steps: Planned next actions.
+
+        Returns:
+            The recorded ProjectUpdate.
+
+        Raises:
+            ProjectError: If author lacks authorization or project doesn't exist.
+        """
+        if not await self.can_post_update(author, project_id):
+            raise ProjectError(
+                "You must be an active member or leader of this project to submit updates."
+            )
+
+        project = await self.get_project(project_id)
+
+        update = await self.db.add_update(
+            project_id=project_id,
+            author_id=author.id,
+            completed=completed,
+            working_on=working_on,
+            blocked_by=blocked_by,
+            next_steps=next_steps,
+        )
+
+        # Notify project channel if available
+        channels = await self.db.get_channels(project_id)
+        target_channel_id = channels.get("announcements") or channels.get("team-chat")
+        if target_channel_id is not None:
+            target_channel = guild.get_channel(target_channel_id)
+            if isinstance(target_channel, discord.TextChannel):
+                with contextlib.suppress(discord.HTTPException):
+                    content = (
+                        f"📣 **New update posted for {project.name} by {author.mention}!**"
+                    )
+                    await target_channel.send(content=content)
+
+        log_action(
+            log,
+            action="post_project_update",
+            result="success",
+            guild_id=guild.id,
+            project_id=project_id,
+            user_id=author.id,
+            update_id=update.id,
+        )
+
+        return update
+
+    async def change_project_status(
+        self,
+        guild: discord.Guild,
+        project_id: int,
+        new_status: ProjectStatus | str,
+        caller: discord.Member,
+    ) -> Project:
+        """Change a project's status with authorization validation.
+
+        Args:
+            guild: Discord guild.
+            project_id: Project ID.
+            new_status: The target ProjectStatus.
+            caller: Discord member initiating the change.
+
+        Returns:
+            The updated Project model.
+
+        Raises:
+            ProjectError: If caller is not authorized.
+        """
+        project = await self.get_project(project_id)
+        if not await self.can_change_status(caller, project):
+            raise ProjectError(
+                "Only the project lead, core members, coordinators, and admins "
+                "can change project status."
+            )
+
+        status_str = new_status.value if isinstance(new_status, ProjectStatus) else new_status
+
+        if status_str == ProjectStatus.ARCHIVED.value:
+            return await self.archive_project(project_id, guild=guild)
+
+        return await self.update_project_status(project_id, new_status)
+

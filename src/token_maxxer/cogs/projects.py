@@ -14,15 +14,17 @@ from discord.ext import commands
 
 from token_maxxer.database import db
 from token_maxxer.services.project_service import (
+    ProjectError,
     ProjectNotFoundError,
     ProjectService,
 )
 from token_maxxer.utils.checks import can_create_projects
 from token_maxxer.utils.constants import ProjectStatus
-from token_maxxer.utils.helpers import error_embed
+from token_maxxer.utils.helpers import error_embed, success_embed
 from token_maxxer.utils.logging import get_logger, log_action
 from token_maxxer.views.project_views import (
     ProjectCreateModal,
+    ProjectUpdateModal,
     build_project_info_embed,
     build_project_list_embed,
 )
@@ -200,6 +202,156 @@ class Projects(
                 title="Project Not Found",
                 description=f"Project #{project_id} does not exist.",
             )
+            await interaction.followup.send(embed=err, ephemeral=True)
+
+    # ─── /project update ──────────────────────────────────────────────────────
+
+    @app_commands.command(
+        name="update",
+        description="Submit a progress update for a project (opens an update form).",
+    )
+    @app_commands.describe(
+        project="Select or enter the project name or ID",
+    )
+    @app_commands.autocomplete(project=project_autocomplete)
+    async def update_project(
+        self,
+        interaction: discord.Interaction,
+        project: str,
+    ) -> None:
+        """Open the project progress update modal."""
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "❌ Updates can only be submitted inside a Discord server.",
+                ephemeral=True,
+            )
+            return
+
+        clean_input = project.strip()
+        project_id: int | None = None
+
+        if clean_input.isdigit():
+            project_id = int(clean_input)
+        else:
+            found = await self.project_service.db.get_project_by_name(
+                interaction.guild_id, clean_input
+            )
+            if found is not None:
+                project_id = found.id
+
+        if project_id is None:
+            await interaction.response.send_message(
+                f"❌ Project `{clean_input}` not found.",
+                ephemeral=True,
+            )
+            return
+
+        can_update = await self.project_service.can_post_update(
+            interaction.user, project_id
+        )
+        if not can_update:
+            await interaction.response.send_message(
+                "❌ You must be an active project member, lead, or core team to post updates.",
+                ephemeral=True,
+            )
+            return
+
+        proj = await self.project_service.get_project(project_id)
+        modal = ProjectUpdateModal(project=proj, project_service=self.project_service)
+        await interaction.response.send_modal(modal)
+
+        log_action(
+            log,
+            action="open_project_update_modal",
+            guild_id=interaction.guild_id,
+            user_id=interaction.user.id,
+            project_id=project_id,
+        )
+
+    # ─── /project status ──────────────────────────────────────────────────────
+
+    @app_commands.command(
+        name="status",
+        description="Change a project's lifecycle status (IDEA, ACTIVE, COMPLETED, ARCHIVED).",
+    )
+    @app_commands.describe(
+        project="Select or enter the project name or ID",
+        new_status="New lifecycle status for the project",
+    )
+    @app_commands.choices(
+        new_status=[
+            app_commands.Choice(name="🟢 Active", value=ProjectStatus.ACTIVE.value),
+            app_commands.Choice(name="💡 Idea", value=ProjectStatus.IDEA.value),
+            app_commands.Choice(name="✅ Completed", value=ProjectStatus.COMPLETED.value),
+            app_commands.Choice(name="📦 Archived", value=ProjectStatus.ARCHIVED.value),
+        ]
+    )
+    @app_commands.autocomplete(project=project_autocomplete)
+    async def change_status(
+        self,
+        interaction: discord.Interaction,
+        project: str,
+        new_status: str,
+    ) -> None:
+        """Update the lifecycle status of a project."""
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "❌ This command must be run inside a Discord server.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer()
+
+        clean_input = project.strip()
+        project_id: int | None = None
+
+        if clean_input.isdigit():
+            project_id = int(clean_input)
+        else:
+            found = await self.project_service.db.get_project_by_name(
+                interaction.guild_id, clean_input
+            )
+            if found is not None:
+                project_id = found.id
+
+        if project_id is None:
+            err = error_embed(
+                title="Project Not Found",
+                description=f"Could not find project `{clean_input}`.",
+            )
+            await interaction.followup.send(embed=err, ephemeral=True)
+            return
+
+        try:
+            updated = await self.project_service.change_project_status(
+                guild=interaction.guild,
+                project_id=project_id,
+                new_status=new_status,
+                caller=interaction.user,
+            )
+
+            embed = success_embed(
+                title="Project Status Updated",
+                description=(
+                    f"**{updated.name}** status changed to **{updated.status}**!\n\n"
+                    f"• Status: **{updated.status}**\n"
+                    f"• Changed by: {interaction.user.mention}"
+                ),
+            )
+            await interaction.followup.send(embed=embed)
+
+            log_action(
+                log,
+                action="change_project_status",
+                guild_id=interaction.guild_id,
+                user_id=interaction.user.id,
+                project_id=project_id,
+                status=new_status,
+            )
+
+        except ProjectError as exc:
+            err = error_embed(title="Status Change Failed", description=str(exc))
             await interaction.followup.send(embed=err, ephemeral=True)
 
 
