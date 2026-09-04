@@ -79,7 +79,9 @@ def has_any_role(*role_names: str) -> Callable[[T], T]:
             required_roles=list(role_names),
         )
 
-    return app_commands.check(predicate)
+    check_decorator = app_commands.check(predicate)
+    check_decorator.predicate = predicate  # type: ignore[attr-defined]
+    return check_decorator
 
 
 def is_coordinator_or_admin() -> Callable[[T], T]:
