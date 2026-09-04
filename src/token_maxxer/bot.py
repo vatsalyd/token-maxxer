@@ -56,7 +56,7 @@ class TokenMaxxer(commands.Bot):
         cog_extensions: list[str] = [
             "token_maxxer.cogs.utility",
             "token_maxxer.cogs.setup",
-            # "token_maxxer.cogs.projects",
+            "token_maxxer.cogs.projects",
             # "token_maxxer.cogs.teams",
             # "token_maxxer.cogs.moderation",
         ]
