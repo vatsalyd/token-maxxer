@@ -11,17 +11,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from token_maxxer.config.settings import settings
+from token_maxxer.utils.checks import NotAuthorizedError
 
 log = logging.getLogger("token_maxxer")
 
 
-class TokenMaxxer(discord.Client):
+class TokenMaxxer(commands.Bot):
     """Main bot client for the DSAI Club Discord server.
 
     Handles gateway connection, command tree setup, and cog loading.
@@ -35,9 +37,11 @@ class TokenMaxxer(discord.Client):
         intents.members = True  # Required for member management
         intents.message_content = False  # Not needed — we use slash commands
 
-        super().__init__(intents=intents)
+        super().__init__(
+            command_prefix=commands.when_mentioned,
+            intents=intents,
+        )
 
-        self.tree = app_commands.CommandTree(self)
         self.target_guild = discord.Object(id=settings.target_guild_id)
         self.start_time: datetime | None = None
 
@@ -51,7 +55,7 @@ class TokenMaxxer(discord.Client):
         # Load cogs — will be added as extensions are built
         cog_extensions: list[str] = [
             "token_maxxer.cogs.utility",
-            # "token_maxxer.cogs.setup",
+            "token_maxxer.cogs.setup",
             # "token_maxxer.cogs.projects",
             # "token_maxxer.cogs.teams",
             # "token_maxxer.cogs.moderation",
@@ -73,7 +77,7 @@ class TokenMaxxer(discord.Client):
 
     async def on_ready(self) -> None:
         """Called when the bot has connected to Discord and is ready."""
-        self.start_time = datetime.now(timezone.utc)
+        self.start_time = datetime.now(UTC)
 
         log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         log.info("  token-maxxer is online!")
@@ -96,7 +100,9 @@ async def _setup_tree_error_handler(tree: app_commands.CommandTree) -> None:
         error: app_commands.AppCommandError,
     ) -> None:
         """Handle errors raised by slash commands."""
-        if isinstance(error, app_commands.MissingPermissions):
+        if isinstance(error, NotAuthorizedError):
+            msg = f"❌ {error}"
+        elif isinstance(error, app_commands.MissingPermissions):
             msg = "❌ You don't have permission to use this command."
         elif isinstance(error, app_commands.CommandOnCooldown):
             msg = f"⏳ Command on cooldown. Try again in {error.retry_after:.1f}s."
