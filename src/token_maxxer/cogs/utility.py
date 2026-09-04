@@ -7,7 +7,7 @@ Commands:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import discord
 from discord import app_commands
@@ -59,7 +59,7 @@ class Utility(commands.Cog):
         uptime_str = "Unknown"
         bot_client = self.bot
         if hasattr(bot_client, "start_time") and bot_client.start_time:
-            delta = datetime.now(timezone.utc) - bot_client.start_time
+            delta = datetime.now(UTC) - bot_client.start_time
             hours, remainder = divmod(int(delta.total_seconds()), 3600)
             minutes, seconds = divmod(remainder, 60)
             days, hours = divmod(hours, 24)

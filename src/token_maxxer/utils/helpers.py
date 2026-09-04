@@ -5,7 +5,7 @@ Small, reusable functions that don't belong to a specific service layer.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import discord
 
@@ -15,7 +15,7 @@ def utcnow_iso() -> str:
 
     Used for database timestamps where consistency matters.
     """
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def format_timestamp(dt: datetime | str, style: str = "R") -> str:
@@ -55,7 +55,7 @@ def make_embed(
     *,
     title: str | None = None,
     description: str | None = None,
-    color: discord.Color = discord.Color.blurple(),
+    color: discord.Color | None = None,
     footer: str | None = None,
 ) -> discord.Embed:
     """Create a standardized Discord embed.
@@ -65,7 +65,7 @@ def make_embed(
     Args:
         title: Embed title.
         description: Embed description/body text.
-        color: Embed sidebar color.
+        color: Embed sidebar color (defaults to blurple).
         footer: Footer text.
 
     Returns:
@@ -74,8 +74,8 @@ def make_embed(
     embed = discord.Embed(
         title=title,
         description=description,
-        color=color,
-        timestamp=datetime.now(timezone.utc),
+        color=color if color is not None else discord.Color.blurple(),
+        timestamp=datetime.now(UTC),
     )
     if footer:
         embed.set_footer(text=footer)
