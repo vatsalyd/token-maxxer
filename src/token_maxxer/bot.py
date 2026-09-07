@@ -59,6 +59,7 @@ class TokenMaxxer(commands.Bot):
             "token_maxxer.cogs.projects",
             "token_maxxer.cogs.teams",
             "token_maxxer.cogs.onboarding",
+            "token_maxxer.cogs.guide",
             # "token_maxxer.cogs.moderation",
         ]
 

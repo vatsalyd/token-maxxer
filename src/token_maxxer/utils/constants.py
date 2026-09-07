@@ -223,6 +223,7 @@ SERVER_STRUCTURE: list[CategoryDefinition] = [
             "📋・planning",
             "📊・project-tracking",
             "📝・tasks",
+            "🤖・bot-guide",
         ],
         is_private=True,
     ),
@@ -295,6 +296,7 @@ CHANNEL_PROJECT_HUB = "📌・project-hub"
 CHANNEL_PROJECT_IDEAS = "💡・project-ideas"
 CHANNEL_PROJECT_SHOWCASE = "🏆・project-showcase"
 CHANNEL_PROJECT_DISCUSSIONS = "💬・project-discussion"
+CHANNEL_BOT_GUIDE = "🤖・bot-guide"
 
 # Channels where regular members can only view/read (cannot send messages)
 READONLY_CHANNELS: set[str] = {
