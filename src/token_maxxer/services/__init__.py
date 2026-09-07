@@ -9,6 +9,7 @@ from token_maxxer.services.guild_service import (
     ReconciliationReport,
     VerificationReport,
 )
+from token_maxxer.services.guide_service import GuideService
 from token_maxxer.services.onboarding_service import OnboardingService
 from token_maxxer.services.permission_service import PermissionService
 from token_maxxer.services.project_service import (
@@ -29,6 +30,7 @@ from token_maxxer.services.team_service import (
 
 __all__ = [
     "GuildService",
+    "GuideService",
     "OnboardingService",
     "PermissionService",
     "ProjectCreationError",
