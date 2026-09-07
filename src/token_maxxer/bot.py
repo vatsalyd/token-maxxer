@@ -79,12 +79,12 @@ class TokenMaxxer(commands.Bot):
         """Called when the bot has connected to Discord and is ready."""
         self.start_time = datetime.now(UTC)
 
-        log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        log.info("---------------------------------------")
         log.info("  token-maxxer is online!")
         log.info("  User    : %s (ID: %s)", self.user, self.user.id if self.user else "?")
         log.info("  Guild   : %s", settings.target_guild_id)
         log.info("  Latency : %.0fms", self.latency * 1000)
-        log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        log.info("---------------------------------------")
 
     async def on_error(self, event_method: str, /, *args, **kwargs) -> None:
         """Global error handler for non-command events."""
@@ -130,18 +130,28 @@ async def _setup_tree_error_handler(tree: app_commands.CommandTree) -> None:
 
 def _setup_logging() -> None:
     """Configure structured logging based on settings."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+
     log_format = (
-        "%(asctime)s │ %(levelname)-7s │ %(name)-25s │ %(message)s"
+        "%(asctime)s | %(levelname)-7s | %(name)-25s | %(message)s"
     )
+    # Use a UTF-8 stream handler to avoid cp1252 encoding errors on Windows
+    handler = logging.StreamHandler(
+        open(sys.stdout.fileno(), mode="w", encoding="utf-8", closefd=False)
+    )
+    handler.setFormatter(logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S"))
+
     logging.basicConfig(
         level=getattr(logging, settings.log_level, logging.INFO),
-        format=log_format,
-        datefmt="%Y-%m-%d %H:%M:%S",
-        stream=sys.stdout,
+        handlers=[handler],
     )
     # Reduce noise from discord.py internals
     logging.getLogger("discord").setLevel(logging.WARNING)
     logging.getLogger("discord.http").setLevel(logging.WARNING)
+
 
 
 def main() -> None:
