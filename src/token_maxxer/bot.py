@@ -58,6 +58,7 @@ class TokenMaxxer(commands.Bot):
             "token_maxxer.cogs.setup",
             "token_maxxer.cogs.projects",
             "token_maxxer.cogs.teams",
+            "token_maxxer.cogs.onboarding",
             # "token_maxxer.cogs.moderation",
         ]
 
@@ -67,6 +68,10 @@ class TokenMaxxer(commands.Bot):
                 log.info("Loaded extension: %s", ext)
             except Exception:
                 log.exception("Failed to load extension: %s", ext)
+
+        # Register persistent views for interactive buttons & menus across restarts
+        from token_maxxer.views.onboarding_views import RoleSelectionView
+        self.add_view(RoleSelectionView())
 
         # Sync commands to the target guild for fast registration
         self.tree.copy_global_to(guild=self.target_guild)
