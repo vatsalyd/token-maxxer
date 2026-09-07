@@ -14,6 +14,10 @@ from token_maxxer.views.project_views import (
     build_project_list_embed,
     build_project_update_embed,
 )
+from token_maxxer.views.onboarding_views import (
+    RoleSelectDropdown,
+    RoleSelectionView,
+)
 from token_maxxer.views.team_views import (
     build_lead_transferred_embed,
     build_member_added_embed,

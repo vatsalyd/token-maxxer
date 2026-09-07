@@ -294,6 +294,7 @@ PROJECT_CHANNEL_TYPES: dict[str, str] = {
 CHANNEL_PROJECT_HUB = "📌・project-hub"
 CHANNEL_PROJECT_IDEAS = "💡・project-ideas"
 CHANNEL_PROJECT_SHOWCASE = "🏆・project-showcase"
+CHANNEL_PROJECT_DISCUSSIONS = "💬・project-discussion"
 
 # Channels where regular members can only view/read (cannot send messages)
 READONLY_CHANNELS: set[str] = {
