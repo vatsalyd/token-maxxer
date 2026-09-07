@@ -8,7 +8,7 @@ from __future__ import annotations
 import discord
 from discord import ui
 
-from token_maxxer.utils.constants import INTEREST_ROLES, ROLE_MEMBER
+from token_maxxer.utils.constants import INTEREST_ROLES, ROLE_ALUMNI, ROLE_MEMBER
 from token_maxxer.utils.helpers import error_embed, info_embed, success_embed
 from token_maxxer.utils.logging import get_logger, log_action
 
@@ -160,6 +160,76 @@ class RoleSelectionView(ui.View):
             err = error_embed(
                 title="Permission Denied",
                 description="The bot lacks permissions to grant the Member role. Please contact an admin.",
+            )
+            await interaction.response.send_message(embed=err, ephemeral=True)
+
+    @ui.button(
+        label="Claim Alumni Role",
+        style=discord.ButtonStyle.secondary,
+        custom_id="token_maxxer:onboarding:claim_alumni",
+        emoji="🎓",
+    )
+    async def claim_alumni_button(
+        self,
+        interaction: discord.Interaction,
+        button: ui.Button,
+    ) -> None:
+        """Allow graduated club members to self-claim or toggle the Alumni role."""
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "❌ This action can only be performed in a server.",
+                ephemeral=True,
+            )
+            return
+
+        member = interaction.user
+        guild = interaction.guild
+        alumni_role = discord.utils.get(guild.roles, name=ROLE_ALUMNI)
+        member_role = discord.utils.get(guild.roles, name=ROLE_MEMBER)
+
+        if alumni_role is None:
+            err = error_embed(
+                title="Role Not Found",
+                description=f"`{ROLE_ALUMNI}` does not exist yet. Please ask an admin to run `/setup`.",
+            )
+            await interaction.response.send_message(embed=err, ephemeral=True)
+            return
+
+        if alumni_role in member.roles:
+            try:
+                await member.remove_roles(alumni_role, reason="Self-removed Alumni role")
+                resp = info_embed(
+                    title="Alumni Role Removed",
+                    description=f"You have surrendered the {alumni_role.mention} role.",
+                )
+                await interaction.response.send_message(embed=resp, ephemeral=True)
+            except discord.Forbidden:
+                err = error_embed(
+                    title="Permission Denied",
+                    description="The bot lacks permissions to remove the Alumni role.",
+                )
+                await interaction.response.send_message(embed=err, ephemeral=True)
+            return
+
+        roles_to_add = [alumni_role]
+        if member_role and member_role not in member.roles:
+            roles_to_add.append(member_role)
+
+        try:
+            await member.add_roles(*roles_to_add, reason="Self-claimed Alumni role")
+            resp = success_embed(
+                title="Welcome, Club Alum! 🎓",
+                description=(
+                    f"🎉 You have received the {alumni_role.mention} role!\n\n"
+                    "You are recognized as a valued club veteran and have access to our community "
+                    "as well as `#🎓・alumni-network` to connect and mentor current students."
+                ),
+            )
+            await interaction.response.send_message(embed=resp, ephemeral=True)
+        except discord.Forbidden:
+            err = error_embed(
+                title="Permission Denied",
+                description="The bot lacks permissions to assign the Alumni role. Please contact an admin.",
             )
             await interaction.response.send_message(embed=err, ephemeral=True)
 

@@ -18,6 +18,7 @@ from token_maxxer.utils.constants import (
     CHANNEL_PROJECT_HUB,
     INTEREST_ROLES,
     ROLE_ADMIN,
+    ROLE_ALUMNI,
     ROLE_COORDINATOR,
     ROLE_CORE_MEMBER,
     ROLE_MEMBER,
@@ -100,8 +101,9 @@ class GuideService:
                 f"3. `{ROLE_COORDINATOR}` *(Operational Coordinators)*\n"
                 f"4. `{ROLE_CORE_MEMBER}` *(Active Core Team Members)*\n"
                 f"5. `{ROLE_PROJECT_LEAD}` *(Assigned dynamically to project leads)*\n"
-                f"6. `{ROLE_MEMBER}` *(Standard club members)*\n"
-                f"7. *Interest Roles* (8 domain focus roles)"
+                f"6. `{ROLE_ALUMNI}` *(Club alumni & graduate mentors)*\n"
+                f"7. `{ROLE_MEMBER}` *(Standard club members)*\n"
+                f"8. *Interest Roles* (8 domain focus roles)"
             ),
             inline=False,
         )
@@ -146,7 +148,8 @@ class GuideService:
                 "• Uses a persistent `RoleSelectionView` (`timeout=None`) that stays live across reboots.\n"
                 f"• Allows members to toggle any of the {len(INTEREST_ROLES)} tech-interest roles:\n"
                 f"  {', '.join(r.name for r in INTEREST_ROLES)}.\n"
-                "• Includes a **Claim Member Role** fallback button for members who joined before bot setup."
+                "• Includes **Claim Member Role** and **Claim Alumni Role** self-service buttons.\n"
+                "• Introduces the `#🎓・alumni-network` channel for student-graduate networking."
             ),
             inline=False,
         )

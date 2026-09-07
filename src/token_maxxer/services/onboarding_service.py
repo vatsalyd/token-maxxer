@@ -15,6 +15,7 @@ from token_maxxer.utils.constants import (
     CHANNEL_PROJECT_HUB,
     INTEREST_ROLES,
     ROLE_ADMIN,
+    ROLE_ALUMNI,
     ROLE_COORDINATOR,
     ROLE_CORE_MEMBER,
     ROLE_MEMBER,
@@ -207,6 +208,7 @@ class OnboardingService:
             name="💬 COMMUNITY",
             value=(
                 "`#💬・general` — Main chat for daily conversation.\n"
+                "`#🎓・alumni-network` — Connect, network, and seek mentorship from club graduates.\n"
                 "`#😂・memes` — AI, tech, and developer humor.\n"
                 "`#🎮・off-topic` — Gaming, music, hobbies, and casual talk."
             ),
@@ -239,7 +241,8 @@ class OnboardingService:
                 "**How to use:**\n"
                 "1. Click the **dropdown menu below** to select your technical interests.\n"
                 "2. Click **Claim Member Role** if you are new and don't have base access yet.\n"
-                "3. You can update your selections or clear them at any time."
+                "3. Click **Claim Alumni Role** if you are a club graduate / alum.\n"
+                "4. You can update your selections or clear them at any time."
             ),
             color=discord.Color.from_str("#9C27B0"),
         )
@@ -258,6 +261,7 @@ class OnboardingService:
             name="Role Hierarchy Note",
             value=(
                 f"• `{ROLE_MEMBER}`: Standard access for all club members.\n"
+                f"• `{ROLE_ALUMNI}`: Recognition for club graduates & mentors.\n"
                 f"• `{ROLE_PROJECT_LEAD}`: Assigned dynamically when leading a project.\n"
                 f"• `{ROLE_CORE_MEMBER}`, `{ROLE_COORDINATOR}`, `{ROLE_ADMIN}`: Operational club leadership."
             ),
