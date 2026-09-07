@@ -521,6 +521,9 @@ class PermissionService:
         # 1. Reconcile categories
         for category in guild.categories:
             cat_norm = category.name.strip().lower()
+            if cat_norm.startswith("🚀 project"):
+                continue
+
             try:
                 if "core team" in cat_norm:
                     await self.apply_core_permissions(category)
@@ -546,6 +549,10 @@ class PermissionService:
         # 2. Reconcile text channels
         for channel in guild.text_channels:
             parent_name = channel.category.name.strip().lower() if channel.category else ""
+            # Project workspaces have their own dynamic permissions managed by ProjectService
+            if parent_name.startswith("🚀 project"):
+                continue
+
             try:
                 if "core team" in parent_name:
                     await self.apply_core_permissions(channel)
@@ -553,7 +560,7 @@ class PermissionService:
                 elif channel.name in READONLY_CHANNELS or "start here" in parent_name:
                     await self.apply_public_permissions(channel, readonly=True)
                     reconciled_count += 1
-                elif not parent_name.startswith("🚀 project"):
+                else:
                     # Regular public channel
                     await self.apply_public_permissions(channel, readonly=False)
                     reconciled_count += 1

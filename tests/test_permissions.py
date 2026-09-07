@@ -106,3 +106,54 @@ async def test_grant_and_revoke_project_member_access(
         overwrite=None,
         reason="token-maxxer revoke project access",
     )
+
+
+@pytest.mark.asyncio
+async def test_reconcile_guild_permissions_skips_project_workspaces(
+    permission_service: PermissionService,
+    mock_guild: MagicMock,
+) -> None:
+    """Verify reconcile_guild_permissions does not touch project workspace channels/categories."""
+    project_cat = MagicMock(spec=discord.CategoryChannel)
+    project_cat.id = 7001
+    project_cat.name = "🚀 PROJECT — GNN Water Quality"
+    project_cat._is_category = True
+    project_cat.edit = AsyncMock()
+
+    proj_announcements = MagicMock(spec=discord.TextChannel)
+    proj_announcements.id = 7002
+    proj_announcements.name = "📢・announcements"
+    proj_announcements.category = project_cat
+    proj_announcements.guild = mock_guild
+    proj_announcements._is_category = False
+    proj_announcements.edit = AsyncMock()
+
+    club_cat = MagicMock(spec=discord.CategoryChannel)
+    club_cat.id = 7003
+    club_cat.name = "📢 CLUB"
+    club_cat._is_category = True
+    club_cat.edit = AsyncMock()
+
+    club_announcements = MagicMock(spec=discord.TextChannel)
+    club_announcements.id = 7004
+    club_announcements.name = "📢・announcements"
+    club_announcements.category = club_cat
+    club_announcements.guild = mock_guild
+    club_announcements._is_category = False
+    club_announcements.edit = AsyncMock()
+
+    mock_guild._channels.clear()
+    mock_guild._channels[project_cat.id] = project_cat
+    mock_guild._channels[proj_announcements.id] = proj_announcements
+    mock_guild._channels[club_cat.id] = club_cat
+    mock_guild._channels[club_announcements.id] = club_announcements
+
+    reconciled_count, errors = await permission_service.reconcile_guild_permissions(mock_guild)
+
+    assert errors == []
+    # Project announcement and category should NOT be edited
+    proj_announcements.edit.assert_not_called()
+    project_cat.edit.assert_not_called()
+    # Club announcement SHOULD be edited
+    club_announcements.edit.assert_called_once()
+
