@@ -2,7 +2,7 @@
 name = "token-maxxer"
 version = "0.1.0"
 description = "Internal Discord workspace and project-management bot for the DSAI Club."
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "discord.py>=2.3,<3.0",
     "python-dotenv>=1.0,<2.0",

@@ -9,6 +9,8 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+src/*.egg-info/
 
 # Testing
 .pytest_cache/

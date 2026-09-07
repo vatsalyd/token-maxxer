@@ -121,9 +121,6 @@ class PermissionService:
             view_channel=True,
             read_message_history=True,
             send_messages=False,
-            create_public_threads=False,
-            create_private_threads=False,
-            send_messages_in_threads=False,
             add_reactions=True,
         )
 
@@ -134,9 +131,6 @@ class PermissionService:
                 view_channel=True,
                 read_message_history=True,
                 send_messages=False,
-                create_public_threads=False,
-                create_private_threads=False,
-                send_messages_in_threads=False,
                 add_reactions=True,
             )
 
