@@ -110,6 +110,13 @@ ADMIN_ROLES: list[RoleDefinition] = [
         permissions=discord.Permissions.none(),
     ),
     RoleDefinition(
+        name="🎓 Alumni",
+        color=discord.Color.from_str("#9B59B6"),
+        hoist=True,
+        mentionable=True,
+        permissions=discord.Permissions.none(),
+    ),
+    RoleDefinition(
         name="👤 Member",
         color=discord.Color.light_grey(),
         hoist=False,
@@ -211,6 +218,7 @@ SERVER_STRUCTURE: list[CategoryDefinition] = [
         emoji="💬",
         channels=[
             "💬・general",
+            "🎓・alumni-network",
             "😂・memes",
             "🎮・off-topic",
         ],
@@ -297,6 +305,7 @@ CHANNEL_PROJECT_IDEAS = "💡・project-ideas"
 CHANNEL_PROJECT_SHOWCASE = "🏆・project-showcase"
 CHANNEL_PROJECT_DISCUSSIONS = "💬・project-discussion"
 CHANNEL_BOT_GUIDE = "🤖・bot-guide"
+CHANNEL_ALUMNI_NETWORK = "🎓・alumni-network"
 
 # Channels where regular members can only view/read (cannot send messages)
 READONLY_CHANNELS: set[str] = {
@@ -313,5 +322,6 @@ ROLE_ADMIN = "👑 Club Admin"
 ROLE_COORDINATOR = "⚡ Coordinator"
 ROLE_CORE_MEMBER = "🔧 Core Member"
 ROLE_PROJECT_LEAD = "🚀 Project Lead"
+ROLE_ALUMNI = "🎓 Alumni"
 ROLE_MEMBER = "👤 Member"
 

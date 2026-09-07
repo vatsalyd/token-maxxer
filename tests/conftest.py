@@ -15,6 +15,7 @@ from token_maxxer.services.project_service import ProjectService
 from token_maxxer.services.team_service import TeamService
 from token_maxxer.utils.constants import (
     ROLE_ADMIN,
+    ROLE_ALUMNI,
     ROLE_COORDINATOR,
     ROLE_CORE_MEMBER,
     ROLE_MEMBER,
@@ -61,6 +62,10 @@ def mock_guild() -> MagicMock:
     core_role.id = 103
     core_role.name = ROLE_CORE_MEMBER
 
+    alumni_role = MagicMock(spec=discord.Role)
+    alumni_role.id = 105
+    alumni_role.name = ROLE_ALUMNI
+
     member_role = MagicMock(spec=discord.Role)
     member_role.id = 104
     member_role.name = ROLE_MEMBER
@@ -69,7 +74,7 @@ def mock_guild() -> MagicMock:
     everyone_role.id = guild.id
     everyone_role.name = "@everyone"
 
-    guild.roles = [admin_role, coord_role, core_role, member_role, everyone_role]
+    guild.roles = [admin_role, coord_role, core_role, alumni_role, member_role, everyone_role]
     guild.default_role = everyone_role
 
     # bot member in guild

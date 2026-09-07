@@ -7,7 +7,7 @@ import pytest
 
 from token_maxxer.cogs.onboarding import Onboarding
 from token_maxxer.services.onboarding_service import OnboardingService
-from token_maxxer.utils.constants import INTEREST_ROLES, ROLE_MEMBER
+from token_maxxer.utils.constants import INTEREST_ROLES, ROLE_ALUMNI, ROLE_MEMBER
 from token_maxxer.views.onboarding_views import RoleSelectionView
 
 
@@ -57,6 +57,7 @@ def test_role_selection_view_components() -> None:
     button_items = [item for item in view.children if isinstance(item, discord.ui.Button)]
     custom_ids = {b.custom_id for b in button_items}
     assert "token_maxxer:onboarding:claim_member" in custom_ids
+    assert "token_maxxer:onboarding:claim_alumni" in custom_ids
     assert "token_maxxer:onboarding:clear_interests" in custom_ids
 
 
@@ -136,3 +137,40 @@ async def test_on_member_join_assigns_role_and_greets(
     # Welcome card posted
     welcome_channel.send.assert_called_once()
     assert welcome_channel.send.call_args[1]["content"] == new_member.mention
+
+
+@pytest.mark.asyncio
+async def test_claim_alumni_button_toggle(mock_guild: MagicMock) -> None:
+    """Verify that clicking Claim Alumni Role assigns both Alumni and Member roles, and toggles off when repeated."""
+    view = RoleSelectionView()
+    button = next(
+        b for b in view.children
+        if isinstance(b, discord.ui.Button) and b.custom_id == "token_maxxer:onboarding:claim_alumni"
+    )
+
+    alumni_role = discord.utils.get(mock_guild.roles, name=ROLE_ALUMNI)
+    member_role = discord.utils.get(mock_guild.roles, name=ROLE_MEMBER)
+    assert alumni_role is not None
+    assert member_role is not None
+
+    user = MagicMock(spec=discord.Member)
+    user.guild = mock_guild
+    user.roles = []
+    user.add_roles = AsyncMock()
+    user.remove_roles = AsyncMock()
+
+    interaction = MagicMock(spec=discord.Interaction)
+    interaction.guild = mock_guild
+    interaction.user = user
+    interaction.response = MagicMock()
+    interaction.response.send_message = AsyncMock()
+
+    # 1. First click: grants alumni_role (and member_role if absent)
+    await button.callback(interaction)
+    user.add_roles.assert_called_once_with(alumni_role, member_role, reason="Self-claimed Alumni role")
+
+    # 2. Second click: user already holds alumni_role -> toggles off
+    user.roles = [alumni_role, member_role]
+    await button.callback(interaction)
+    user.remove_roles.assert_called_once_with(alumni_role, reason="Self-removed Alumni role")
+

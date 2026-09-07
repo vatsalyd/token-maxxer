@@ -9,6 +9,7 @@ from token_maxxer.services.permission_service import PermissionService
 from token_maxxer.utils.constants import (
     ADMIN_ROLES,
     ROLE_ADMIN,
+    ROLE_ALUMNI,
     ROLE_COORDINATOR,
     ROLE_CORE_MEMBER,
     ROLE_MEMBER,
@@ -24,12 +25,13 @@ def test_role_hierarchy_ordering() -> None:
         ROLE_COORDINATOR,
         ROLE_CORE_MEMBER,
         ROLE_PROJECT_LEAD,
+        ROLE_ALUMNI,
         ROLE_MEMBER,
     ]
 
 
 def test_role_permissions_least_privilege() -> None:
-    """Ensure standard member role does not have admin or management permissions."""
+    """Ensure standard member and alumni roles do not have admin or management permissions."""
     member_spec = next(r for r in ADMIN_ROLES if r.name == ROLE_MEMBER)
     member_perms = member_spec.permissions
     assert member_perms.administrator is False
@@ -37,6 +39,11 @@ def test_role_permissions_least_privilege() -> None:
     assert member_perms.manage_guild is False
     assert member_perms.manage_roles is False
     assert member_perms.manage_messages is False
+
+    alumni_spec = next(r for r in ADMIN_ROLES if r.name == ROLE_ALUMNI)
+    assert alumni_spec.hoist is True
+    assert alumni_spec.mentionable is True
+    assert alumni_spec.permissions.administrator is False
 
 
 @pytest.mark.asyncio
