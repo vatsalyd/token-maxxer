@@ -127,17 +127,19 @@ class GuideService:
         embed = make_embed(
             title="👋 Onboarding & Community Workflows (`/onboard`)",
             description=(
-                "The onboarding system ensures every newcomer is welcomed and oriented immediately."
+                "The onboarding system ensures every newcomer is welcomed, assigned baseline roles, "
+                "and oriented immediately."
             ),
             color=discord.Color.from_str("#00BCD4"),
         )
 
         embed.add_field(
-            name="1. ⚡ Automated Member Joins (`on_member_join`)",
+            name="1. ⚡ Automated Member Joins (`on_member_join` & `on_ready`)",
             value=(
-                f"When a new student joins the Discord server:\n"
-                f"• The bot automatically grants `{ROLE_MEMBER}` so they have base access.\n"
-                f"• Sends a personalized welcome embed into `#👋・welcome` tagging them and linking next steps."
+                f"• When a new student joins, the bot grants `{ROLE_MEMBER}` for base access.\n"
+                f"• Posts a personalized greeting card in `#👋・welcome` tagging them and detailing first steps.\n"
+                f"• **Role Reconciliation**: At startup (`on_ready`) or via `/onboard sync-members`, the bot scans "
+                f"all guild members and automatically assigns `{ROLE_MEMBER}` to any user missing it."
             ),
             inline=False,
         )
@@ -155,11 +157,11 @@ class GuideService:
         )
 
         embed.add_field(
-            name="3. 📝 Updating Onboarding Content",
+            name="3. 📝 Updating Onboarding Content & Commands",
             value=(
-                "To refresh rules or welcome text:\n"
-                "1. Edit definitions in `services/onboarding_service.py`.\n"
-                "2. Run `/onboard setup` in Discord — old bot embeds will be cleanly replaced without duplicates."
+                "• **Refresh Start Channels**: Run `/onboard setup` to cleanly bulk purge and recreate embeds.\n"
+                "• **Sync Member Roles**: Run `/onboard sync-members` to reconcile missing member roles.\n"
+                "• **Test Welcome Card**: Run `/onboard test-welcome` to preview member greetings."
             ),
             inline=False,
         )
@@ -183,22 +185,35 @@ class GuideService:
                 "• Restricted to Core Members, Coordinators, and Admins.\n"
                 "• Opens an interactive creation modal (Name, Description, Tech Stack, Deadline).\n"
                 "• Staged creation automatically creates:\n"
-                "  - Category: `🚀 PROJECT: <NAME>`\n"
+                "  - Category: `🚀 PROJECT — <NAME>`\n"
                 "  - Channels: `📢・announcements`, `💬・team-chat`, `📋・tasks`, `🧪・work`\n"
-                f"  - Broadcasts announcement card in `{CHANNEL_PROJECT_HUB}`.\n"
-                "• SQLite stores channel IDs, lead user ID, and project metadata."
+                f"  - Broadcasts persistent announcement card in `{CHANNEL_PROJECT_HUB}`.\n"
+                "• SQLite stores channel IDs, hub card message ID, lead user ID, and project metadata."
             ),
             inline=False,
         )
 
         embed.add_field(
-            name="2. 📊 Lifecycle States & Milestones",
+            name="2. 📊 Lifecycle States & Live Dashboard Sync",
             value=(
                 "• **`IDEA`** 💡: Conceptual phase in `#💡・project-ideas`.\n"
                 "• **`ACTIVE`** 🟢: Workspace provisioned, active development in progress.\n"
                 "• **`COMPLETED`** ✅: Deliverables finished, showcased in `#🏆・project-showcase`.\n"
                 "• **`ARCHIVED`** 📦: `/project archive <name>` freezes channels to read-only for archival.\n"
-                "• **Progress Updates**: `/project update <name>` broadcasts structured milestone reports."
+                f"• **Live Hub Auto-Sync**: Whenever `/project update`, `/project deadline`, or `/project status` "
+                f"is called, the announcement card in `{CHANNEL_PROJECT_HUB}` is automatically edited with live "
+                f"stats, progress bars, and lead info."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="3. 🧹 Safe Project Deletion (`/project delete`)",
+            value=(
+                "• Restricted to Club Admins and Coordinators.\n"
+                "• Prompts an interactive confirmation modal/button view before proceeding.\n"
+                "• Cascades deletion through SQLite (deleting members, channels, and update logs) "
+                "and permanently deletes all Discord channels and category for that workspace."
             ),
             inline=False,
         )
@@ -230,11 +245,13 @@ class GuideService:
         )
 
         embed.add_field(
-            name="2. 👑 Lead Authority & Delegation",
+            name="2. 👑 Lead Authority & Role Transfer",
             value=(
+                f"• Project Leads receive the hoisted `{ROLE_PROJECT_LEAD}` role.\n"
                 "• The Project Lead has authority to add/remove members, post updates, and set deadlines.\n"
                 "• Core Members, Coordinators, and Admins can manage any team as server moderators.\n"
-                "• `/team transfer-lead <project> <@new_lead>` reassigns the project lead in Discord and DB."
+                f"• `/team transfer-lead <project> <@new_lead>` updates the database and dynamically assigns "
+                f"`{ROLE_PROJECT_LEAD}` to the new lead while revoking it from the former lead if they have no other active leads."
             ),
             inline=False,
         )
@@ -321,6 +338,7 @@ class GuideService:
                 "• **Repair All Channels & Roles**: `/setup` (re-syncs permissions without deleting data).\n"
                 "• **Audit Discrepancies**: `/setup verify_only:True` (reports missing or misordered items).\n"
                 "• **Refresh Onboarding Channels**: `/onboard setup` (re-posts rules, welcome, and role picker).\n"
+                "• **Sync Member Roles**: `/onboard sync-members` (assigns missing Member roles to unassigned users).\n"
                 "• **Re-publish Bot Guide**: `/guide publish` (re-posts this guide in `#🤖・bot-guide`)."
             ),
             inline=False,
