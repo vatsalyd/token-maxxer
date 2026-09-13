@@ -27,6 +27,7 @@ from token_maxxer.database import (
 )
 from token_maxxer.services.permission_service import PermissionService
 from token_maxxer.utils.constants import (
+    CHANNEL_PROJECT_HUB,
     PROJECT_CATEGORY_TEMPLATE,
     PROJECT_CHANNEL_TYPES,
     PROJECT_WORKSPACE_CHANNELS,
@@ -379,6 +380,74 @@ class ProjectService:
 
         return project
 
+    async def sync_project_hub_card(
+        self,
+        guild: discord.Guild,
+        project_id: int,
+    ) -> bool:
+        """Synchronize the live project card in #📌・project-hub with latest project state.
+
+        Updates stats, lead, member count, tech stack, channels, deadline, and status in real time.
+        If the card message does not exist or was deleted, creates a new one and stores its ID.
+
+        Args:
+            guild: The Discord guild.
+            project_id: The primary key of the project.
+
+        Returns:
+            True if synchronized successfully, False otherwise.
+        """
+        project = await self.get_project(project_id)
+        if project is None:
+            return False
+
+        hub_channel = discord.utils.get(guild.text_channels, name=CHANNEL_PROJECT_HUB)
+        if hub_channel is None:
+            return False
+
+        channels = await self.db.get_channels(project_id)
+        members = await self.db.get_members(project_id)
+        member_count = max(len(members), 1)
+
+        from token_maxxer.views.project_views import build_project_card_embed
+
+        card = build_project_card_embed(project, channels=channels, member_count=member_count)
+
+        # 1. Try to edit existing message if hub_message_id is stored
+        if project.hub_message_id is not None:
+            try:
+                msg = await hub_channel.fetch_message(project.hub_message_id)
+                await msg.edit(embed=card)
+                log_action(
+                    log,
+                    action="sync_project_hub_card",
+                    result="updated",
+                    guild_id=guild.id,
+                    project_id=project_id,
+                    message_id=msg.id,
+                )
+                return True
+            except (discord.NotFound, discord.HTTPException):
+                pass
+
+        # 2. If no message ID or fetch failed, send fresh card and update DB
+        try:
+            msg_content = f"📌 **Project Overview:** **{project.name}**"
+            new_msg = await hub_channel.send(content=msg_content, embed=card)
+            await self.db.update_project_hub_message(project_id, new_msg.id)
+            project.hub_message_id = new_msg.id
+            log_action(
+                log,
+                action="sync_project_hub_card",
+                result="recreated",
+                guild_id=guild.id,
+                project_id=project_id,
+                message_id=new_msg.id,
+            )
+            return True
+        except discord.HTTPException:
+            return False
+
     async def archive_project(
         self,
         project_id: int,
@@ -471,11 +540,19 @@ class ProjectService:
             user_id=caller.id if caller else None,
         )
 
+        with contextlib.suppress(Exception):
+            if guild is not None:
+                await self.sync_project_hub_card(guild, project_id)
+
         return project
 
-    async def complete_project(self, project_id: int) -> Project:
+    async def complete_project(self, project_id: int, guild: discord.Guild | None = None) -> Project:
         """Mark a project as COMPLETED."""
-        return await self.update_project_status(project_id, ProjectStatus.COMPLETED)
+        project = await self.update_project_status(project_id, ProjectStatus.COMPLETED)
+        if guild is not None:
+            with contextlib.suppress(Exception):
+                await self.sync_project_hub_card(guild, project_id)
+        return project
 
     async def set_project_deadline(
         self,
@@ -525,6 +602,9 @@ class ProjectService:
             user_id=caller.id,
             deadline=clean_deadline,
         )
+
+        with contextlib.suppress(Exception):
+            await self.sync_project_hub_card(guild, project_id)
 
         return project
 
@@ -627,6 +707,9 @@ class ProjectService:
             update_id=update.id,
         )
 
+        with contextlib.suppress(Exception):
+            await self.sync_project_hub_card(guild, project_id)
+
         return update
 
     async def change_project_status(
@@ -660,7 +743,12 @@ class ProjectService:
         status_str = new_status.value if isinstance(new_status, ProjectStatus) else new_status
 
         if status_str == ProjectStatus.ARCHIVED.value:
-            return await self.archive_project(project_id, guild=guild, caller=caller)
+            res = await self.archive_project(project_id, guild=guild, caller=caller)
+        else:
+            res = await self.update_project_status(project_id, new_status)
 
-        return await self.update_project_status(project_id, new_status)
+        with contextlib.suppress(Exception):
+            await self.sync_project_hub_card(guild, project_id)
+
+        return res
 

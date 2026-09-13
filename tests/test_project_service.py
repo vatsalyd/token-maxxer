@@ -273,3 +273,54 @@ async def test_transfer_lead_updates_project_lead_role(
     lead.remove_roles.assert_called_once_with(
         lead_role, reason="No longer leading any active projects"
     )
+
+
+@pytest.mark.asyncio
+async def test_sync_project_hub_card(
+    project_service: ProjectService,
+    mock_guild: discord.Guild,
+) -> None:
+    """Verify live project card sync edits existing message or creates a new one."""
+    from unittest.mock import AsyncMock, MagicMock
+    from token_maxxer.utils.constants import CHANNEL_PROJECT_HUB
+
+    hub_channel = MagicMock(spec=discord.TextChannel)
+    hub_channel.id = 9901
+    hub_channel.name = CHANNEL_PROJECT_HUB
+    hub_channel._is_category = False
+
+    mock_msg = MagicMock(spec=discord.Message)
+    mock_msg.id = 555666
+    mock_msg.edit = AsyncMock()
+
+    hub_channel.send = AsyncMock(return_value=mock_msg)
+    hub_channel.fetch_message = AsyncMock(return_value=mock_msg)
+
+    mock_guild._channels[hub_channel.id] = hub_channel
+
+    lead = make_member(1001, "Alice", mock_guild)
+    workspace = await project_service.create_project(
+        guild=mock_guild,
+        name="Sync Test Project",
+        description="Testing live hub updates",
+        lead=lead,
+    )
+    proj_id = workspace.project.id
+
+    # 1. Initial sync creates the message and stores ID
+    synced = await project_service.sync_project_hub_card(mock_guild, proj_id)
+    assert synced is True
+    hub_channel.send.assert_called_once()
+    stored_p = await project_service.get_project(proj_id)
+    assert stored_p.hub_message_id == 555666
+
+    # 2. Updating deadline automatically syncs and edits the existing message
+    await project_service.set_project_deadline(
+        guild=mock_guild,
+        project_id=proj_id,
+        deadline="2026-12-31",
+        caller=lead,
+    )
+    hub_channel.fetch_message.assert_called_with(555666)
+    mock_msg.edit.assert_called()
+

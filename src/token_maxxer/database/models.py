@@ -39,6 +39,7 @@ class Project:
     created_at: str = ""
     archived_at: str | None = None
     deadline: str | None = None
+    hub_message_id: int | None = None
 
     @property
     def is_active(self) -> bool:

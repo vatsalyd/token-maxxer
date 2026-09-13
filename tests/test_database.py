@@ -215,3 +215,24 @@ async def test_get_project_by_name_prioritizes_active_project(temp_db: Database)
     assert resolved.status == ProjectStatus.ACTIVE.value
     assert resolved.lead_id == 2
 
+
+@pytest.mark.asyncio
+async def test_project_hub_message_id_persistence(temp_db: Database) -> None:
+    """Verify storing and retrieving hub_message_id on a project."""
+    p = await temp_db.create_project(
+        guild_id=1,
+        name="Hub Sync Project",
+        description="Testing live card tracking",
+        lead_id=42,
+    )
+    assert p.hub_message_id is None
+
+    # Update message ID
+    success = await temp_db.update_project_hub_message(p.id, 9876543210)
+    assert success is True
+
+    fetched = await temp_db.get_project(p.id)
+    assert fetched is not None
+    assert fetched.hub_message_id == 9876543210
+
+
