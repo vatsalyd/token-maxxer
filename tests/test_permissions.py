@@ -157,3 +157,35 @@ async def test_reconcile_guild_permissions_skips_project_workspaces(
     # Club announcement SHOULD be edited
     club_announcements.edit.assert_called_once()
 
+
+@pytest.mark.asyncio
+async def test_reconcile_guild_permissions_skips_archived_workspaces(
+    permission_service: PermissionService,
+    mock_guild: MagicMock,
+) -> None:
+    """Verify reconcile_guild_permissions does not touch archived project categories or channels."""
+    archived_cat = MagicMock(spec=discord.CategoryChannel)
+    archived_cat.id = 8001
+    archived_cat.name = "📦 ARCHIVED — OLD PROJECT"
+    archived_cat._is_category = True
+    archived_cat.edit = AsyncMock()
+
+    archived_channel = MagicMock(spec=discord.TextChannel)
+    archived_channel.id = 8002
+    archived_channel.name = "team-chat"
+    archived_channel.category = archived_cat
+    archived_channel.guild = mock_guild
+    archived_channel._is_category = False
+    archived_channel.edit = AsyncMock()
+
+    mock_guild._channels.clear()
+    mock_guild._channels[archived_cat.id] = archived_cat
+    mock_guild._channels[archived_channel.id] = archived_channel
+
+    reconciled_count, errors = await permission_service.reconcile_guild_permissions(mock_guild)
+
+    assert errors == []
+    assert reconciled_count == 0
+    archived_cat.edit.assert_not_called()
+    archived_channel.edit.assert_not_called()
+

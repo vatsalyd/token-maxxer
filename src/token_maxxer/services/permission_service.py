@@ -521,7 +521,12 @@ class PermissionService:
         # 1. Reconcile categories
         for category in guild.categories:
             cat_norm = category.name.strip().lower()
-            if cat_norm.startswith("🚀 project"):
+            if (
+                cat_norm.startswith("🚀 project")
+                or cat_norm.startswith("project —")
+                or cat_norm.startswith("📦 archived")
+                or cat_norm.startswith("archived —")
+            ):
                 continue
 
             try:
@@ -550,7 +555,12 @@ class PermissionService:
         for channel in guild.text_channels:
             parent_name = channel.category.name.strip().lower() if channel.category else ""
             # Project workspaces have their own dynamic permissions managed by ProjectService
-            if parent_name.startswith("🚀 project"):
+            if (
+                parent_name.startswith("🚀 project")
+                or parent_name.startswith("project —")
+                or parent_name.startswith("📦 archived")
+                or parent_name.startswith("archived —")
+            ):
                 continue
 
             try:
