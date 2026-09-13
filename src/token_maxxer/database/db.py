@@ -159,11 +159,22 @@ class Database:
             return self._row_to_project(row)
 
     async def get_project_by_name(self, guild_id: int, name: str) -> Project | None:
-        """Fetch a project by case-insensitive name within a guild."""
+        """Fetch a project by case-insensitive name within a guild.
+
+        Prioritizes active projects over inactive/archived ones, and returns
+        the newest matching project.
+        """
         async with self.connect() as conn:
             cursor = await conn.execute(
-                "SELECT * FROM projects WHERE guild_id = ? AND LOWER(name) = LOWER(?)",
-                (guild_id, name.strip()),
+                """
+                SELECT * FROM projects
+                WHERE guild_id = ? AND LOWER(name) = LOWER(?)
+                ORDER BY
+                    CASE WHEN status = ? THEN 0 ELSE 1 END,
+                    id DESC
+                LIMIT 1
+                """,
+                (guild_id, name.strip(), ProjectStatus.ACTIVE.value),
             )
             row = await cursor.fetchone()
             if row is None:
