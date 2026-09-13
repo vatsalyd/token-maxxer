@@ -554,6 +554,93 @@ class ProjectService:
                 await self.sync_project_hub_card(guild, project_id)
         return project
 
+    async def delete_project(
+        self,
+        *,
+        guild: discord.Guild,
+        project_id: int,
+        caller: discord.Member,
+    ) -> Project:
+        """Permanently delete a project, its Discord channels/category, and database records.
+
+        Restricted to administrators and coordinators.
+
+        Args:
+            guild: The Discord guild.
+            project_id: The primary key of the project.
+            caller: The Discord member requesting deletion.
+
+        Returns:
+            The deleted Project model.
+
+        Raises:
+            ProjectNotFoundError: If project does not exist.
+            ProjectError: If caller is unauthorized.
+        """
+        project = await self.get_project(project_id)
+        if project is None:
+            raise ProjectNotFoundError(f"Project #{project_id} does not exist.")
+
+        # Validate caller authorization: coordinator, admin, or guild owner
+        is_authorized = (
+            caller.id == guild.owner_id
+            or caller.guild_permissions.administrator
+            or any(r.name in (ROLE_ADMIN, ROLE_COORDINATOR) for r in caller.roles)
+        )
+        if not is_authorized:
+            raise ProjectError("Only administrators and coordinators can permanently delete projects.")
+
+        # 1. Delete Discord Category and its channels
+        if project.category_id is not None:
+            category = guild.get_channel(project.category_id)
+            if isinstance(category, discord.CategoryChannel):
+                for ch in list(category.text_channels):
+                    with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                        await ch.delete(reason=f"token-maxxer project '{project.name}' deleted by {caller.name}")
+                with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                    await category.delete(reason=f"token-maxxer project '{project.name}' deleted by {caller.name}")
+
+        # 2. Ensure any mapped channels are also deleted
+        channels = await self.db.get_channels(project_id)
+        for ch_id in channels.values():
+            ch = guild.get_channel(ch_id)
+            if ch is not None:
+                with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                    await ch.delete(reason=f"token-maxxer project '{project.name}' deleted by {caller.name}")
+
+        # 3. If live card exists in #project-hub, delete it
+        if project.hub_message_id is not None:
+            hub_channel = discord.utils.get(guild.text_channels, name=CHANNEL_PROJECT_HUB)
+            if hub_channel is not None:
+                with contextlib.suppress(discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    msg = await hub_channel.fetch_message(project.hub_message_id)
+                    await msg.delete()
+
+        # 4. Revoke ROLE_PROJECT_LEAD if lead has no other active projects
+        lead_role = discord.utils.get(guild.roles, name=ROLE_PROJECT_LEAD)
+        if lead_role:
+            active_projects = await self.db.list_projects(guild.id, status=ProjectStatus.ACTIVE.value)
+            still_leads = any(p.lead_id == project.lead_id and p.id != project.id for p in active_projects)
+            lead_member = guild.get_member(project.lead_id)
+            if not still_leads and lead_member and lead_role in lead_member.roles:
+                with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                    await lead_member.remove_roles(lead_role, reason=f"Project '{project.name}' deleted")
+
+        # 5. Cascade delete database records
+        await self.db.delete_project(project_id)
+
+        log_action(
+            log,
+            action="delete_project",
+            result="success",
+            guild_id=guild.id,
+            project_id=project_id,
+            user_id=caller.id,
+        )
+
+        return project
+
+
     async def set_project_deadline(
         self,
         *,

@@ -645,3 +645,74 @@ class ArchiveConfirmationView(discord.ui.View):
             view=self,
         )
 
+
+class ProjectDeleteConfirmView(discord.ui.View):
+    """Interactive confirmation dialog for permanently deleting a project workspace."""
+
+    def __init__(
+        self,
+        project: Project,
+        caller: discord.Member,
+        project_service: ProjectService | None = None,
+        timeout: float = 60.0,
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self.project = project
+        self.caller = caller
+        self.project_service = project_service or ProjectService()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.caller.id:
+            await interaction.response.send_message(
+                "❌ Only the administrator who initiated the delete command can confirm it.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Permanently Delete Project", style=discord.ButtonStyle.danger, emoji="🗑️")
+    async def confirm(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button[ProjectDeleteConfirmView],
+    ) -> None:
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        await interaction.response.defer()
+
+        if interaction.guild is None:
+            await interaction.followup.send("❌ Cannot perform deletion outside a server.", ephemeral=True)
+            return
+
+        try:
+            await self.project_service.delete_project(
+                guild=interaction.guild,
+                project_id=self.project.id,
+                caller=self.caller,
+            )
+            await interaction.edit_original_response(
+                content=f"✅ **Project '{self.project.name}' and all associated Discord channels have been permanently deleted.**",
+                embed=None,
+                view=self,
+            )
+        except Exception as exc:
+            err = error_embed(title="Deletion Failed", description=str(exc))
+            await interaction.followup.send(embed=err, ephemeral=True)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button[ProjectDeleteConfirmView],
+    ) -> None:
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        await interaction.response.edit_message(
+            content="❌ **Project deletion cancelled. No changes were made.**",
+            embed=None,
+            view=self,
+        )
+
+

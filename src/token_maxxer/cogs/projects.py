@@ -22,13 +22,14 @@ from token_maxxer.services.project_service import (
     ProjectNotFoundError,
     ProjectService,
 )
-from token_maxxer.utils.checks import can_create_projects
+from token_maxxer.utils.checks import can_create_projects, is_coordinator_or_admin
 from token_maxxer.utils.constants import ProjectStatus
 from token_maxxer.utils.helpers import error_embed, success_embed
 from token_maxxer.utils.logging import get_logger, log_action
 from token_maxxer.views.project_views import (
     ArchiveConfirmationView,
     ProjectCreateModal,
+    ProjectDeleteConfirmView,
     ProjectUpdateModal,
     build_project_archived_embed,
     build_project_deadline_embed,
@@ -546,6 +547,73 @@ class Projects(
                 await interaction.followup.send(embed=err, ephemeral=True)
             else:
                 await interaction.response.send_message(embed=err, ephemeral=True)
+
+    # ─── /project delete ──────────────────────────────────────────────────────
+
+    @app_commands.command(
+        name="delete",
+        description="Permanently delete a project workspace and database record (Admin only).",
+    )
+    @app_commands.describe(project="The project name or numeric ID to permanently delete.")
+    @app_commands.autocomplete(project=project_autocomplete)
+    @is_coordinator_or_admin()
+    async def delete(
+        self,
+        interaction: discord.Interaction,
+        project: str,
+    ) -> None:
+        """Prompt confirmation to permanently delete a project workspace."""
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "❌ Project commands can only be used inside a Discord server.",
+                ephemeral=True,
+            )
+            return
+
+        clean_input = project.strip()
+        project_id: int | None = None
+
+        if clean_input.isdigit():
+            project_id = int(clean_input)
+        else:
+            found = await self.project_service.db.get_project_by_name(
+                interaction.guild_id, clean_input
+            )
+            if found is not None:
+                project_id = found.id
+
+        if project_id is None:
+            err = error_embed(
+                title="Project Not Found",
+                description=f"Could not find project `{clean_input}`.",
+            )
+            await interaction.response.send_message(embed=err, ephemeral=True)
+            return
+
+        try:
+            proj = await self.project_service.get_project(project_id)
+            view = ProjectDeleteConfirmView(
+                project=proj,
+                caller=interaction.user,
+                project_service=self.project_service,
+            )
+            warning_msg = (
+                f"⚠️ **Are you sure you want to permanently delete project '{proj.name}'?**\n\n"
+                f"This will permanently delete:\n"
+                f"• All Discord channels in the workspace\n"
+                f"• The workspace category\n"
+                f"• The Project Hub dashboard card\n"
+                f"• All database records, member rosters, and progress logs\n\n"
+                f"**This action cannot be undone!**"
+            )
+            await interaction.response.send_message(
+                content=warning_msg,
+                view=view,
+                ephemeral=True,
+            )
+        except ProjectError as exc:
+            err = error_embed(title="Delete Failed", description=str(exc))
+            await interaction.response.send_message(embed=err, ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

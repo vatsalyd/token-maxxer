@@ -324,3 +324,131 @@ async def test_sync_project_hub_card(
     hub_channel.fetch_message.assert_called_with(555666)
     mock_msg.edit.assert_called()
 
+
+@pytest.mark.asyncio
+async def test_delete_project_service_success(
+    project_service: ProjectService,
+    mock_guild: discord.Guild,
+) -> None:
+    """Verify delete_project deletes Discord category, channels, hub card, and revokes lead role."""
+    from unittest.mock import AsyncMock, MagicMock
+    from token_maxxer.utils.constants import ROLE_ADMIN, ROLE_PROJECT_LEAD
+
+    admin_role = next(r for r in mock_guild.roles if r.name == ROLE_ADMIN)
+    admin = make_member(99, "AdminUser", mock_guild, roles=[admin_role], is_admin=True)
+    lead = make_member(1001, "Alice", mock_guild)
+
+    workspace = await project_service.create_project(
+        guild=mock_guild,
+        name="Delete Project Service Test",
+        description="Testing complete deletion flow",
+        lead=lead,
+    )
+    proj_id = workspace.project.id
+    category = workspace.category
+    category.delete = AsyncMock()
+
+    # Track channels and delete mock
+    for ch in workspace.channels.values():
+        ch.delete = AsyncMock()
+
+    # Lead has lead role
+    lead_role = discord.utils.get(mock_guild.roles, name=ROLE_PROJECT_LEAD)
+    lead.roles.append(lead_role)
+
+    # Perform delete
+    deleted = await project_service.delete_project(
+        guild=mock_guild,
+        project_id=proj_id,
+        caller=admin,
+    )
+
+    assert deleted.id == proj_id
+    category.delete.assert_called_once()
+    lead.remove_roles.assert_called_with(lead_role, reason="Project 'Delete Project Service Test' deleted")
+
+    # Verify DB has no record of project
+    with pytest.raises(Exception):
+        await project_service.get_project(proj_id)
+
+
+@pytest.mark.asyncio
+async def test_delete_project_unauthorized(
+    project_service: ProjectService,
+    mock_guild: discord.Guild,
+) -> None:
+    """Verify non-admin/coordinator members cannot delete projects."""
+    lead = make_member(1001, "Alice", mock_guild)
+    outsider = make_member(1002, "Outsider", mock_guild)
+
+    workspace = await project_service.create_project(
+        guild=mock_guild,
+        name="Unauthorized Delete Project",
+        description="Testing unauthorized delete",
+        lead=lead,
+    )
+    proj_id = workspace.project.id
+
+    with pytest.raises(ProjectError, match="Only administrators and coordinators"):
+        await project_service.delete_project(
+            guild=mock_guild,
+            project_id=proj_id,
+            caller=outsider,
+        )
+
+
+@pytest.mark.asyncio
+async def test_project_delete_confirm_view(
+    project_service: ProjectService,
+    mock_guild: discord.Guild,
+) -> None:
+    """Verify ProjectDeleteConfirmView confirm and cancel button callbacks."""
+    from unittest.mock import AsyncMock, MagicMock
+    from token_maxxer.views.project_views import ProjectDeleteConfirmView
+    from token_maxxer.utils.constants import ROLE_ADMIN
+
+    admin_role = next(r for r in mock_guild.roles if r.name == ROLE_ADMIN)
+    admin = make_member(99, "AdminUser", mock_guild, roles=[admin_role], is_admin=True)
+    lead = make_member(1001, "Alice", mock_guild)
+
+    workspace = await project_service.create_project(
+        guild=mock_guild,
+        name="Confirm View Test",
+        description="Testing UI view",
+        lead=lead,
+    )
+    proj_id = workspace.project.id
+
+    view = ProjectDeleteConfirmView(
+        project=workspace.project,
+        caller=admin,
+        project_service=project_service,
+    )
+
+    # 1. Test cancel
+    cancel_button = next(b for b in view.children if isinstance(b, discord.ui.Button) and b.label == "Cancel")
+    cancel_interaction = MagicMock(spec=discord.Interaction)
+    cancel_interaction.user = admin
+    cancel_interaction.guild = mock_guild
+    cancel_interaction.response = MagicMock()
+    cancel_interaction.response.edit_message = AsyncMock()
+
+    await cancel_button.callback(cancel_interaction)
+    cancel_interaction.response.edit_message.assert_called_once()
+    assert cancel_button.disabled is True
+
+    # 2. Test confirm
+    confirm_button = next(b for b in view.children if isinstance(b, discord.ui.Button) and "Delete" in b.label)
+    confirm_interaction = MagicMock(spec=discord.Interaction)
+    confirm_interaction.user = admin
+    confirm_interaction.guild = mock_guild
+    confirm_interaction.response = MagicMock()
+    confirm_interaction.response.defer = AsyncMock()
+    confirm_interaction.edit_original_response = AsyncMock()
+
+    await confirm_button.callback(confirm_interaction)
+    confirm_interaction.response.defer.assert_called_once()
+    confirm_interaction.edit_original_response.assert_called_once()
+    assert confirm_button.disabled is True
+
+

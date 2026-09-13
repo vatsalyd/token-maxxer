@@ -256,6 +256,16 @@ class Database:
             await conn.commit()
             return cursor.rowcount > 0
 
+    async def delete_project(self, project_id: int) -> bool:
+        """Permanently delete a project from SQLite with cascade deletion."""
+        async with self.connect() as conn:
+            cursor = await conn.execute(
+                "DELETE FROM projects WHERE id = ?",
+                (project_id,),
+            )
+            await conn.commit()
+            return cursor.rowcount > 0
+
     async def update_project_lead(self, project_id: int, new_lead_id: int) -> bool:
         """Transfer project leadership to another user."""
         async with self.connect() as conn:

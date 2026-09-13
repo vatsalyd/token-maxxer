@@ -236,3 +236,31 @@ async def test_project_hub_message_id_persistence(temp_db: Database) -> None:
     assert fetched.hub_message_id == 9876543210
 
 
+@pytest.mark.asyncio
+async def test_delete_project_cascades(temp_db: Database) -> None:
+    """Verify deleting a project cascades to members, channels, and updates."""
+    p = await temp_db.create_project(
+        guild_id=1,
+        name="Delete Me Project",
+        description="Testing cascading deletion",
+        lead_id=10,
+    )
+    # Add member, channel, update
+    await temp_db.add_member(p.id, 20)
+    await temp_db.set_channel(p.id, "team-chat", 777)
+    await temp_db.add_update(project_id=p.id, author_id=10, completed="Phase 1")
+
+    # Delete project
+    deleted = await temp_db.delete_project(p.id)
+    assert deleted is True
+
+    # Verify project is gone
+    assert await temp_db.get_project(p.id) is None
+
+    # Verify cascades
+    assert await temp_db.get_members(p.id) == []
+    assert await temp_db.get_channels(p.id) == {}
+    assert await temp_db.get_updates(p.id) == []
+
+
+
