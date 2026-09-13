@@ -184,3 +184,34 @@ async def test_project_updates(temp_db: Database) -> None:
     updates = await temp_db.get_updates(proj.id, limit=5)
     assert len(updates) == 1
     assert updates[0].working_on == "Implementing database layer"
+
+
+@pytest.mark.asyncio
+async def test_get_project_by_name_prioritizes_active_project(temp_db: Database) -> None:
+    """Verify get_project_by_name returns the active project over an archived project with the same name."""
+    guild_id = 999
+
+    # 1. Create older project that gets archived
+    p1 = await temp_db.create_project(
+        guild_id=guild_id,
+        name="Transformer Tool",
+        description="Older version",
+        lead_id=1,
+    )
+    await temp_db.update_project_status(p1.id, ProjectStatus.ARCHIVED.value)
+
+    # 2. Create newer project with same name that is active
+    p2 = await temp_db.create_project(
+        guild_id=guild_id,
+        name="Transformer Tool",
+        description="New active version",
+        lead_id=2,
+    )
+
+    # Lookup should return the active project (p2), not the older archived project (p1)
+    resolved = await temp_db.get_project_by_name(guild_id, "transformer tool")
+    assert resolved is not None
+    assert resolved.id == p2.id
+    assert resolved.status == ProjectStatus.ACTIVE.value
+    assert resolved.lead_id == 2
+
