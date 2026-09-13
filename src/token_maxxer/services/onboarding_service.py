@@ -222,8 +222,9 @@ class OnboardingService:
                 "`/project list` — View all registered club projects with status filter.\n"
                 "`/project info <name>` — View team members, GitHub repo, tech stack, and deadlines.\n"
                 "`/project create` — Launch an interactive project creation modal (Admins/Leads).\n"
-                "`/project update <name>` — Post a structured milestone update.\n"
+                "`/project update <name>` — Post a structured milestone update (syncs Live Project Hub).\n"
                 "`/team list <name>` — View active collaborators on any project.\n"
+                "`/onboard sync-members` — Sync baseline member roles across the guild (Admins).\n"
                 "`/ping` & `/botinfo` — Bot latency, uptime, and system health."
             ),
             inline=False,

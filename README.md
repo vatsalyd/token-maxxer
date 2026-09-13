@@ -4,7 +4,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![discord.py](https://img.shields.io/badge/discord.py-2.x-blue.svg)](https://github.com/Rapptz/discord.py)
-[![Tests](https://img.shields.io/badge/tests-19%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-47%20passed-brightgreen.svg)]()
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-black.svg)](https://github.com/astral-sh/ruff)
 [![License](https://img.shields.io/badge/license-Private-red.svg)]()
 
@@ -36,7 +36,10 @@
 - **Automated Workspace Provisioning**: Creates standardized categories and channels with a single command or interactive modal.
 - **Least-Privilege Security**: All club members can discover and read project workspaces, but only assigned team members and leadership can send messages or post work.
 - **Idempotent Reconciliation**: The `/setup` command safely verifies and provisions roles, categories, and channels without creating duplicates or clobbering existing configuration.
-- **Lifecycle Management**: Projects transition smoothly through `IDEA` → `ACTIVE` → `COMPLETED` → `ARCHIVED`. Archiving safely preserves workspace history in read-only mode.
+- **Live Project Hub Dashboard**: Project announcements in `#📌・project-hub` update in real time with progress bars, team size, lead info, and status transitions.
+- **Lifecycle Management & Safe Deletion**: Projects transition smoothly through `IDEA` → `ACTIVE` → `COMPLETED` → `ARCHIVED`. Safe archiving locks channels to read-only, while `/project delete` provides interactive confirmation before cascading deletion of DB entries and channels.
+- **Newcomer Onboarding & Role Sync**: Interactive self-service role selector with interest tags, member and alumni claim buttons, automated welcome greetings, and background member role reconciliation.
+- **Core Team Developer Guide**: Built-in 7-section operational manual published directly to `#🤖・bot-guide` via `/guide publish`.
 - **Asynchronous SQLite Persistence**: Powered by `aiosqlite` with WAL mode and foreign key cascades for high performance and reliability.
 - **Interactive Discord Modals & Views**: Native forms for project creation, weekly progress logs, and safety confirmation prompts.
 
@@ -51,8 +54,9 @@ The bot provisions a standardized role hierarchy and permanent channel structure
 1. **👑 Club Admin**: Highest internal leadership authority. Full management permissions.
 2. **⚡ Coordinator**: Active club coordinators. Can run `/setup`, manage channels, and organize activities.
 3. **🔧 Core Member**: Active core team members. Elevated communication and project creation rights.
-4. **🚀 Project Lead**: Dynamic title granted to leaders of active projects.
-5. **👤 Member**: General club member. Can read all workspaces and participate in public discussions.
+4. **🚀 Project Lead**: Dynamic title granted to leaders of active projects. Automatically assigned and revoked on leadership transfer.
+5. **🎓 Alumni**: Dedicated recognition and community channel for club graduates and mentors.
+6. **👤 Member**: General club member. Can read all workspaces and participate in public discussions.
 
 ### Interest Roles (Self-Selectable)
 - 🐍 Python
@@ -79,27 +83,30 @@ The bot provisions a standardized role hierarchy and permanent channel structure
 └── 📚・resources
 
 🚀 PROJECTS
+├── 📌・project-hub
 ├── 💡・project-ideas
-├── 📋・projects-hub
-└── 🏆・showcase
+├── 🧩・team-formation
+├── 💬・project-discussion
+└── 🏆・project-showcase
 
 🧠 LEARNING
-├── 💬・help
-├── 📑・paper-reading
-├── 💻・code-review
-└── 💡・weekly-discussions
+├── 💬・technical-discussion
+├── ❓・help-desk
+├── 👀・code-review
+└── 📚・learning-resources
 
 💬 COMMUNITY
 ├── 💬・general
-├── 🤖・ai-chat
+├── 🎓・alumni-network
 ├── 😂・memes
 └── 🎮・off-topic
 
-🔒 CORE TEAM (Restricted)
+🔐 CORE TEAM (Restricted)
 ├── 💭・internal
 ├── 📋・planning
 ├── 📊・project-tracking
-└── 📝・tasks
+├── 📝・tasks
+└── 🤖・bot-guide
 ```
 
 ---
@@ -121,22 +128,32 @@ The bot provisions a standardized role hierarchy and permanent channel structure
 ## Slash Commands Reference
 
 ### 🛠️ Setup & Maintenance
-- `/setup` — *(Coordinator / Admin)* Idempotently reconcile all roles, categories, and channels.
+- `/setup [verify_only]` — *(Coordinator / Admin)* Idempotently reconcile all roles, categories, and channels. If `verify_only=True`, reports discrepancies without making modifications.
 
 ### 🚀 Projects (`/project`)
-- `/project create` — Opens an interactive modal (Name, Description, Tech Stack) and creates workspace.
-- `/project list [status]` — Lists all projects with optional status filter (`IDEA`, `ACTIVE`, `COMPLETED`, `ARCHIVED`).
-- `/project info <project>` — Detailed card with tech stack, team roster, workspace links, and recent updates.
-- `/project update <project>` — Opens an interactive modal to submit progress updates (completed, blockers, next steps).
-- `/project status <project> <new_status>` — *(Lead / Core / Admin)* Changes lifecycle state.
-- `/project deadline <project> [deadline]` — Views current deadline or sets a target completion date.
-- `/project archive <project> [force]` — Safely archives a project workspace, locking channels to read-only.
+- `/project create` — Opens an interactive modal (Name, Description, Tech Stack, Deadline) and provisions workspace channels and announcement.
+- `/project list [status]` — Lists club projects with optional lifecycle status filter (`IDEA`, `ACTIVE`, `COMPLETED`, `ARCHIVED`).
+- `/project info <project>` — Detailed card with tech stack, team roster, workspace channel links, and recent update history.
+- `/project update <project>` — Opens an interactive modal to submit structured progress updates (completed, blockers, next steps). Automatically syncs the live announcement card in `#📌・project-hub`.
+- `/project status <project> <new_status>` — *(Lead / Core / Admin)* Transitions project lifecycle state (`IDEA` → `ACTIVE` → `COMPLETED` → `ARCHIVED`). Automatically updates live dashboard card in `#📌・project-hub`.
+- `/project deadline <project> [deadline]` — Views current deadline or sets a target completion date. Automatically updates live dashboard card in `#📌・project-hub`.
+- `/project archive <project> [force]` — Safely archives a project workspace, locking channels to read-only and preserving history.
+- `/project delete <project>` — *(Admin / Coordinator)* Permanently deletes a project workspace and cascades database removal. Prompts an interactive safety confirmation dialog before deleting Discord channels and records.
 
 ### 👥 Teams (`/team`)
 - `/team add <project> <member>` — Adds a member to the project and grants workspace write permissions.
-- `/team remove <project> <member>` — Removes a member from the project and revokes write permissions.
+- `/team remove <project> <member>` — Removes a member from the project and revokes workspace write permissions.
 - `/team list <project>` — Displays the current project roster with roles and join dates.
-- `/team transfer-lead <project> <new_lead>` — *(Lead / Admin)* Transfers project leadership to another team member.
+- `/team transfer-lead <project> <new_lead>` — *(Lead / Admin)* Transfers project leadership to another team member, dynamically updating the `🚀 Project Lead` role.
+
+### 🧭 Onboarding (`/onboard`)
+- `/onboard setup` — *(Coordinator / Admin)* Bulk purges old bot messages and populates `#📜・rules`, `#👋・welcome`, `#🧭・server-guide`, and `#🎭・roles` with authoritative embeds and persistent role-picker components.
+- `/onboard sync-members` — *(Coordinator / Admin)* Scans all guild members and assigns the `👤 Member` role to anyone missing it. Automatically runs at bot startup as well.
+- `/onboard test-welcome [member]` — *(Coordinator / Admin)* Dispatches a test welcome greeting card to `#👋・welcome`.
+
+### 📖 Internal Documentation (`/guide`)
+- `/guide publish` — *(Core / Coordinator / Admin)* Purges and publishes the full 7-section core developer and operations manual to the private `#🤖・bot-guide` channel.
+- `/guide view [section]` — *(Core / Coordinator / Admin)* Ephemerally inspects any specific manual section (`overview`, `governance`, `onboarding`, `projects`, `teams`, `developer`, `troubleshooting`).
 
 ### ℹ️ Utility
 - `/ping` — Checks Discord gateway and API latency.
@@ -206,7 +223,7 @@ python -m token_maxxer.bot
 
 ## Testing
 
-The test suite contains 19 automated tests covering database operations, permission overrides, project lifecycle flows, and setup idempotency.
+The test suite contains 47 automated tests covering database operations, permission overrides, project lifecycle flows, live hub sync, cascade deletion, member role sync, guide publishing, and setup idempotency.
 
 ```powershell
 # Run the test suite
