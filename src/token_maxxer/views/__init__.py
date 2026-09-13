@@ -5,6 +5,7 @@ from token_maxxer.views.project_views import (
     STATUS_EMOJIS,
     ArchiveConfirmationView,
     ProjectCreateModal,
+    ProjectDeleteConfirmView,
     ProjectUpdateModal,
     build_project_archived_embed,
     build_project_card_embed,
@@ -27,6 +28,7 @@ from token_maxxer.views.team_views import (
 
 __all__ = [
     "ArchiveConfirmationView",
+    "ProjectDeleteConfirmView",
     "STATUS_COLORS",
     "STATUS_EMOJIS",
     "ProjectCreateModal",
