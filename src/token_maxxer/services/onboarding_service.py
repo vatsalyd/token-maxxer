@@ -312,11 +312,23 @@ class OnboardingService:
     ) -> bool:
         """Purge previous bot messages in a channel and post the updated embed."""
         try:
-            # Delete previous messages sent by the bot
-            async for msg in channel.history(limit=50):
-                if msg.author.id == self.bot.user.id:
-                    with contextlib.suppress(discord.HTTPException):
-                        await msg.delete()
+            # Purge previous messages sent by the bot using bulk purge
+            bot_user_id = self.bot.user.id if self.bot.user else None
+            if bot_user_id:
+                try:
+                    await channel.purge(
+                        limit=50,
+                        check=lambda msg: msg.author.id == bot_user_id,
+                        bulk=True,
+                    )
+                except (discord.Forbidden, AttributeError):
+                    # Fallback if bot lacks MANAGE_MESSAGES for bulk delete or in mock environments
+                    async for msg in channel.history(limit=50):
+                        if msg.author.id == bot_user_id:
+                            with contextlib.suppress(discord.HTTPException):
+                                await msg.delete()
+                except discord.HTTPException:
+                    pass
 
             # Post the fresh embed
             if view is not None:

@@ -247,3 +247,53 @@ async def test_clear_interests_button_batches_removals(mock_guild: MagicMock) ->
     interaction.followup.send.assert_called_once()
 
 
+@pytest.mark.asyncio
+async def test_clean_and_post_uses_bulk_purge(
+    onboarding_service: OnboardingService,
+) -> None:
+    """Verify _clean_and_post attempts bulk purge to avoid rate limits."""
+    channel = MagicMock(spec=discord.TextChannel)
+    channel.name = "rules"
+    channel.purge = AsyncMock()
+    channel.send = AsyncMock()
+
+    embed = discord.Embed(title="Rules")
+    result = await onboarding_service._clean_and_post(channel, embed)
+
+    assert result is True
+    channel.purge.assert_called_once()
+    _, kwargs = channel.purge.call_args
+    assert kwargs.get("bulk") is True
+    assert kwargs.get("limit") == 50
+    channel.send.assert_called_once_with(embed=embed)
+
+
+@pytest.mark.asyncio
+async def test_clean_and_post_fallback_on_forbidden(
+    onboarding_service: OnboardingService,
+) -> None:
+    """Verify _clean_and_post falls back to individual delete when bulk purge is forbidden."""
+    channel = MagicMock(spec=discord.TextChannel)
+    channel.name = "rules"
+    channel.purge = AsyncMock(side_effect=discord.Forbidden(MagicMock(), "Missing Permissions"))
+    channel.send = AsyncMock()
+
+    msg = MagicMock(spec=discord.Message)
+    msg.author.id = onboarding_service.bot.user.id
+    msg.delete = AsyncMock()
+
+    async def mock_history(*args, **kwargs):
+        yield msg
+
+    channel.history = MagicMock(side_effect=mock_history)
+
+    embed = discord.Embed(title="Rules")
+    result = await onboarding_service._clean_and_post(channel, embed)
+
+    assert result is True
+    channel.purge.assert_called_once()
+    msg.delete.assert_called_once()
+    channel.send.assert_called_once_with(embed=embed)
+
+
+
