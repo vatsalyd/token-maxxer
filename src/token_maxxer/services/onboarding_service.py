@@ -6,6 +6,7 @@ rules, welcome instructions, server navigation, and persistent role pickers.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 
 import discord
@@ -383,3 +384,54 @@ class OnboardingService:
                 errors.append(f"Failed to post to '{ch_name}' (permission denied or HTTP error).")
 
         return success_count, errors
+
+    async def sync_missing_member_roles(
+        self,
+        guild: discord.Guild,
+    ) -> tuple[int, int, list[str]]:
+        """Scan all non-bot guild members and grant ROLE_MEMBER to anyone missing it.
+
+        Args:
+            guild: The Discord guild.
+
+        Returns:
+            A tuple of ``(synced_count, skipped_count, errors)``.
+        """
+        member_role = discord.utils.get(guild.roles, name=ROLE_MEMBER)
+        if member_role is None:
+            return 0, 0, [f"Role '{ROLE_MEMBER}' does not exist in the guild. Run `/setup` first."]
+
+        synced_count = 0
+        skipped_count = 0
+        errors: list[str] = []
+
+        for member in guild.members:
+            if member.bot:
+                continue
+
+            if member_role in member.roles:
+                skipped_count += 1
+                continue
+
+            try:
+                await member.add_roles(
+                    member_role,
+                    reason="token-maxxer sync: assigned missing member role",
+                )
+                synced_count += 1
+                log_action(
+                    log,
+                    action="sync_member_role",
+                    result="success",
+                    guild_id=guild.id,
+                    user_id=member.id,
+                )
+                await asyncio.sleep(0.05)
+            except discord.Forbidden:
+                err = f"Permission denied assigning role to {member.display_name} ({member.id})"
+                errors.append(err)
+            except discord.HTTPException as exc:
+                err = f"HTTP error assigning role to {member.display_name}: {exc}"
+                errors.append(err)
+
+        return synced_count, skipped_count, errors

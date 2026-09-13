@@ -38,6 +38,21 @@ class Onboarding(
     # ─── Event Listeners ───────────────────────────────────────────────────────
 
     @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        """Reconcile missing member roles on bot startup for any offline joins."""
+        if settings.target_guild_id:
+            guild = self.bot.get_guild(settings.target_guild_id)
+            if guild is not None:
+                synced, skipped, errors = await self.onboarding_service.sync_missing_member_roles(guild)
+                if synced > 0:
+                    log.info(
+                        "Startup member sync: Granted %s role to %d member(s) (%d already had it)",
+                        ROLE_MEMBER,
+                        synced,
+                        skipped,
+                    )
+
+    @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
         """Handle new members joining the server.
 
@@ -181,6 +196,49 @@ class Onboarding(
                 description=f"Bot lacks permissions to send messages to {welcome_channel.mention}.",
             )
             await interaction.response.send_message(embed=err, ephemeral=True)
+
+    @app_commands.command(
+        name="sync-members",
+        description="Scan all server members and grant the Member role to anyone missing it.",
+    )
+    @is_coordinator_or_admin()
+    async def sync_members(self, interaction: discord.Interaction) -> None:
+        """Scan guild members and assign missing Member role."""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "❌ This command must be run inside a Discord server.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        synced, skipped, errors = await self.onboarding_service.sync_missing_member_roles(
+            interaction.guild
+        )
+
+        if errors:
+            err_text = "\n".join(f"• {e}" for e in errors[:5])
+            embed = error_embed(
+                title="Member Role Sync Completed with Warnings",
+                description=(
+                    f"• **Assigned role:** {synced} member(s)\n"
+                    f"• **Already had role:** {skipped} member(s)\n\n"
+                    f"**Errors encountered:**\n{err_text}"
+                ),
+            )
+        else:
+            embed = success_embed(
+                title="Member Role Sync Complete",
+                description=(
+                    f"Successfully checked members in **{interaction.guild.name}**:\n\n"
+                    f"• **Assigned {ROLE_MEMBER}:** {synced} member(s)\n"
+                    f"• **Already had role:** {skipped} member(s)\n\n"
+                    f"All qualifying members now have base server access."
+                ),
+            )
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:
