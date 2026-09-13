@@ -174,3 +174,76 @@ async def test_claim_alumni_button_toggle(mock_guild: MagicMock) -> None:
     await button.callback(interaction)
     user.remove_roles.assert_called_once_with(alumni_role, reason="Self-removed Alumni role")
 
+
+@pytest.mark.asyncio
+async def test_role_select_dropdown_callback_batches_roles(mock_guild: MagicMock) -> None:
+    """Verify that RoleSelectDropdown callback defers and batches role additions."""
+    from token_maxxer.views.onboarding_views import RoleSelectDropdown
+
+    dropdown = RoleSelectDropdown()
+    dropdown._values = [INTEREST_ROLES[0].name, INTEREST_ROLES[1].name]
+
+    role1 = MagicMock(spec=discord.Role)
+    role1.name = INTEREST_ROLES[0].name
+    role2 = MagicMock(spec=discord.Role)
+    role2.name = INTEREST_ROLES[1].name
+    member_role = discord.utils.get(mock_guild.roles, name=ROLE_MEMBER)
+    mock_guild.roles.extend([role1, role2])
+
+    user = MagicMock(spec=discord.Member)
+    user.guild = mock_guild
+    user.roles = []
+    user.add_roles = AsyncMock()
+
+    interaction = MagicMock(spec=discord.Interaction)
+    interaction.guild = mock_guild
+    interaction.user = user
+    interaction.response = MagicMock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup = MagicMock()
+    interaction.followup.send = AsyncMock()
+
+    await dropdown.callback(interaction)
+
+    interaction.response.defer.assert_called_once_with(ephemeral=True)
+    user.add_roles.assert_called_once()
+    added_roles = user.add_roles.call_args[0]
+    assert role1 in added_roles
+    assert role2 in added_roles
+    assert member_role in added_roles
+    interaction.followup.send.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_clear_interests_button_batches_removals(mock_guild: MagicMock) -> None:
+    """Verify that clear_interests_button defers and batches role removals."""
+    view = RoleSelectionView()
+    button = next(
+        b for b in view.children
+        if isinstance(b, discord.ui.Button) and b.custom_id == "token_maxxer:onboarding:clear_interests"
+    )
+
+    role1 = MagicMock(spec=discord.Role)
+    role1.name = INTEREST_ROLES[0].name
+    mock_guild.roles.append(role1)
+
+    user = MagicMock(spec=discord.Member)
+    user.guild = mock_guild
+    user.roles = [role1]
+    user.remove_roles = AsyncMock()
+
+    interaction = MagicMock(spec=discord.Interaction)
+    interaction.guild = mock_guild
+    interaction.user = user
+    interaction.response = MagicMock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup = MagicMock()
+    interaction.followup.send = AsyncMock()
+
+    await button.callback(interaction)
+
+    interaction.response.defer.assert_called_once_with(ephemeral=True)
+    user.remove_roles.assert_called_once_with(role1, reason="Self-cleared interest roles")
+    interaction.followup.send.assert_called_once()
+
+

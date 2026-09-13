@@ -44,10 +44,14 @@ class RoleSelectDropdown(ui.Select):
             )
             return
 
+        # Defer immediately to avoid Discord 3-second interaction expiration
+        await interaction.response.defer(ephemeral=True)
+
         member = interaction.user
         guild = interaction.guild
         selected_names = set(self.values)
 
+        roles_to_add: list[discord.Role] = []
         added: list[str] = []
         already_had: list[str] = []
         errors: list[str] = []
@@ -61,19 +65,21 @@ class RoleSelectDropdown(ui.Select):
             if role in member.roles:
                 already_had.append(role_name)
             else:
-                try:
-                    await member.add_roles(role, reason="Self-assigned interest role")
-                    added.append(role_name)
-                except discord.Forbidden:
-                    errors.append(f"Missing permissions to add `{role_name}`.")
+                roles_to_add.append(role)
+                added.append(role_name)
 
         # Ensure user also has the base Member role
         member_role = discord.utils.get(guild.roles, name=ROLE_MEMBER)
-        if member_role and member_role not in member.roles:
+        if member_role and member_role not in member.roles and member_role not in roles_to_add:
+            roles_to_add.append(member_role)
+
+        # Batch apply roles in a single Discord API call
+        if roles_to_add:
             try:
-                await member.add_roles(member_role, reason="Auto-assigned base member role")
+                await member.add_roles(*roles_to_add, reason="Self-assigned interest/member roles")
             except discord.Forbidden:
-                pass
+                errors.append("Bot lacks permissions to assign one or more roles.")
+                added.clear()
 
         # Build response embed
         lines: list[str] = []
@@ -88,7 +94,7 @@ class RoleSelectDropdown(ui.Select):
             title="Roles Updated",
             description="\n\n".join(lines) if lines else "No changes were made.",
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
         log_action(
             log,
@@ -252,18 +258,25 @@ class RoleSelectionView(ui.View):
             )
             return
 
+        # Defer immediately to avoid Discord 3-second interaction expiration
+        await interaction.response.defer(ephemeral=True)
+
         member = interaction.user
         guild = interaction.guild
+        roles_to_remove: list[discord.Role] = []
         removed: list[str] = []
 
         for r_def in INTEREST_ROLES:
             role = discord.utils.get(guild.roles, name=r_def.name)
             if role and role in member.roles:
-                try:
-                    await member.remove_roles(role, reason="Self-cleared interest role")
-                    removed.append(r_def.name)
-                except discord.Forbidden:
-                    pass
+                roles_to_remove.append(role)
+                removed.append(r_def.name)
+
+        if roles_to_remove:
+            try:
+                await member.remove_roles(*roles_to_remove, reason="Self-cleared interest roles")
+            except discord.Forbidden:
+                removed.clear()
 
         if removed:
             resp = success_embed(
@@ -276,4 +289,4 @@ class RoleSelectionView(ui.View):
                 description="You do not currently have any technical interest roles assigned.",
             )
 
-        await interaction.response.send_message(embed=resp, ephemeral=True)
+        await interaction.followup.send(embed=resp, ephemeral=True)
