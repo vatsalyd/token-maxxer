@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS projects (
     category_id INTEGER,
     created_at TEXT NOT NULL,
     archived_at TEXT,
-    deadline TEXT
+    deadline TEXT,
+    hub_message_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS project_members (

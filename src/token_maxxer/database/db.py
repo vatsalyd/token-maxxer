@@ -54,6 +54,8 @@ class Database:
             await conn.executescript(schema_sql)
             with contextlib.suppress(Exception):
                 await conn.execute("ALTER TABLE projects ADD COLUMN deadline TEXT;")
+            with contextlib.suppress(Exception):
+                await conn.execute("ALTER TABLE projects ADD COLUMN hub_message_id INTEGER;")
             await conn.commit()
 
         self._initialized = True
@@ -144,6 +146,7 @@ class Database:
             category_id=category_id,
             created_at=created_at,
             deadline=deadline,
+            hub_message_id=None,
         )
 
     async def get_project(self, project_id: int) -> Project | None:
@@ -237,6 +240,18 @@ class Database:
             cursor = await conn.execute(
                 "UPDATE projects SET category_id = ? WHERE id = ?",
                 (category_id, project_id),
+            )
+            await conn.commit()
+            return cursor.rowcount > 0
+
+    async def update_project_hub_message(
+        self, project_id: int, message_id: int | None
+    ) -> bool:
+        """Store the #project-hub message ID for live status synchronization."""
+        async with self.connect() as conn:
+            cursor = await conn.execute(
+                "UPDATE projects SET hub_message_id = ? WHERE id = ?",
+                (message_id, project_id),
             )
             await conn.commit()
             return cursor.rowcount > 0
@@ -520,6 +535,9 @@ class Database:
         deadline: str | None = None
         with contextlib.suppress(KeyError, IndexError):
             deadline = row["deadline"]
+        hub_message_id: int | None = None
+        with contextlib.suppress(KeyError, IndexError):
+            hub_message_id = row["hub_message_id"]
         return Project(
             id=row["id"],
             guild_id=row["guild_id"],
@@ -532,6 +550,7 @@ class Database:
             created_at=row["created_at"],
             archived_at=row["archived_at"],
             deadline=deadline,
+            hub_message_id=hub_message_id,
         )
 
 

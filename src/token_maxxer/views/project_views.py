@@ -428,7 +428,9 @@ class ProjectCreateModal(discord.ui.Modal, title="Create Project Workspace"):
                     f"🎉 **New Project Launched!** <@{project.lead_id}> created "
                     f"**{project.name}**"
                 )
-                await hub_channel.send(content=msg_content, embed=card)
+                msg = await hub_channel.send(content=msg_content, embed=card)
+                await self.project_service.db.update_project_hub_message(project.id, msg.id)
+                project.hub_message_id = msg.id
                 log_action(
                     log,
                     action="post_to_project_hub",
