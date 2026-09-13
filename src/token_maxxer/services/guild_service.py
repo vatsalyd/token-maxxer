@@ -411,6 +411,17 @@ class GuildService:
         # 2. If category specified, search outside category across all guild channels
         if category is not None:
             for ch in guild.text_channels:
+                # Do not move channels that belong to active or archived project workspaces
+                if ch.category is not None:
+                    cat_name = ch.category.name.strip().lower()
+                    if (
+                        cat_name.startswith("🚀 project")
+                        or cat_name.startswith("project —")
+                        or cat_name.startswith("📦 archived")
+                        or cat_name.startswith("archived —")
+                    ):
+                        continue
+
                 ch_norm = _normalize_name(ch.name)
                 if ch_norm == target_norm or _strip_emoji_prefix(ch.name) == target_base:
                     try:
