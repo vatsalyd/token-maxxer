@@ -296,4 +296,74 @@ async def test_clean_and_post_fallback_on_forbidden(
     channel.send.assert_called_once_with(embed=embed)
 
 
+@pytest.mark.asyncio
+async def test_sync_missing_member_roles(
+    onboarding_service: OnboardingService,
+    mock_guild: MagicMock,
+) -> None:
+    """Verify sync_missing_member_roles scans members and assigns ROLE_MEMBER to those missing it."""
+    from tests.conftest import make_member
+
+    member_role = discord.utils.get(mock_guild.roles, name=ROLE_MEMBER)
+    assert member_role is not None
+
+    # Member 1 already has the role
+    m1 = make_member(101, "ExistingMember", mock_guild, roles=[member_role])
+    m1.bot = False
+
+    # Member 2 does not have the role
+    m2 = make_member(102, "NewMember", mock_guild, roles=[])
+    m2.bot = False
+
+    # Member 3 is a bot
+    m3 = make_member(103, "OtherBot", mock_guild, roles=[])
+    m3.bot = True
+
+    mock_guild.members = [m1, m2, m3]
+
+    synced, skipped, errors = await onboarding_service.sync_missing_member_roles(mock_guild)
+
+    assert synced == 1
+    assert skipped == 1
+    assert errors == []
+    m2.add_roles.assert_called_once_with(
+        member_role, reason="token-maxxer sync: assigned missing member role"
+    )
+    m1.add_roles.assert_not_called()
+    m3.add_roles.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sync_members_command(
+    mock_bot: MagicMock,
+    mock_guild: MagicMock,
+) -> None:
+    """Verify /onboard sync-members command executes and responds with embed."""
+    from token_maxxer.cogs.onboarding import Onboarding
+    from tests.conftest import make_member
+
+    cog = Onboarding(mock_bot)
+    member_role = discord.utils.get(mock_guild.roles, name=ROLE_MEMBER)
+
+    m = make_member(201, "TestUser", mock_guild, roles=[])
+    m.bot = False
+    mock_guild.members = [m]
+
+    interaction = MagicMock(spec=discord.Interaction)
+    interaction.guild = mock_guild
+    interaction.response = MagicMock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup = MagicMock()
+    interaction.followup.send = AsyncMock()
+
+    await cog.sync_members.callback(cog, interaction)
+
+    interaction.response.defer.assert_called_once_with(ephemeral=True)
+    interaction.followup.send.assert_called_once()
+    m.add_roles.assert_called_once_with(
+        member_role, reason="token-maxxer sync: assigned missing member role"
+    )
+
+
+
 
