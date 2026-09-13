@@ -27,7 +27,9 @@ from token_maxxer.utils.constants import (
     ROLE_ADMIN,
     ROLE_COORDINATOR,
     ROLE_CORE_MEMBER,
+    ROLE_PROJECT_LEAD,
     ProjectMemberRole,
+    ProjectStatus,
 )
 from token_maxxer.utils.logging import get_logger, log_action
 
@@ -297,6 +299,20 @@ class TeamService:
                             await self.permission_service.grant_project_member_access(
                                 ch, old_lead, is_lead=False
                             )
+
+        # 3. Update Discord roles for old and new leads
+        lead_role = discord.utils.get(guild.roles, name=ROLE_PROJECT_LEAD)
+        if lead_role:
+            if lead_role not in new_lead.roles:
+                with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                    await new_lead.add_roles(lead_role, reason=f"Became project lead for {project.name}")
+
+            active_projects = await self.db.list_projects(guild.id, status=ProjectStatus.ACTIVE.value)
+            still_leads = any(p.lead_id == old_lead_id for p in active_projects)
+            old_lead = guild.get_member(old_lead_id)
+            if not still_leads and old_lead and lead_role in old_lead.roles:
+                with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                    await old_lead.remove_roles(lead_role, reason="No longer leading any active projects")
 
         log_action(
             log,

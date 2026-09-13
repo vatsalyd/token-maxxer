@@ -33,6 +33,7 @@ from token_maxxer.utils.constants import (
     ROLE_ADMIN,
     ROLE_COORDINATOR,
     ROLE_CORE_MEMBER,
+    ROLE_PROJECT_LEAD,
     ProjectStatus,
 )
 from token_maxxer.utils.helpers import utcnow_iso
@@ -258,6 +259,12 @@ class ProjectService:
                 channels_count=len(created_channels),
             )
 
+            # Assign ROLE_PROJECT_LEAD role to lead if present in guild
+            lead_role = discord.utils.get(guild.roles, name=ROLE_PROJECT_LEAD)
+            if lead_role and lead_role not in lead.roles:
+                with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                    await lead.add_roles(lead_role, reason=f"Assigned project lead for {clean_name}")
+
             return ProjectWorkspace(
                 project=project,
                 category=created_category,
@@ -445,6 +452,16 @@ class ProjectService:
                     )
                     with contextlib.suppress(discord.Forbidden, discord.HTTPException):
                         await ann_ch.send(archived_msg)
+
+            # If lead does not lead any other active projects, revoke ROLE_PROJECT_LEAD
+            lead_role = discord.utils.get(guild.roles, name=ROLE_PROJECT_LEAD)
+            if lead_role:
+                active_projects = await self.db.list_projects(guild.id, status=ProjectStatus.ACTIVE.value)
+                still_leads = any(p.lead_id == project.lead_id and p.id != project.id for p in active_projects)
+                lead_member = guild.get_member(project.lead_id)
+                if not still_leads and lead_member and lead_role in lead_member.roles:
+                    with contextlib.suppress(discord.Forbidden, discord.HTTPException):
+                        await lead_member.remove_roles(lead_role, reason="No longer leading any active projects")
 
         log_action(
             log,
