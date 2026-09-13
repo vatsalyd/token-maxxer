@@ -112,3 +112,52 @@ async def test_permission_checks(mock_guild: discord.Guild) -> None:
     assert await create_check(interaction_core) is True
     with pytest.raises(NotAuthorizedError):
         await create_check(interaction_member)
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_text_channel_does_not_hijack_project_channels(
+    mock_guild: discord.Guild,
+) -> None:
+    """Ensure get_or_create_text_channel does not steal channels belonging to project workspaces."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    service = GuildService()
+
+    # Create target category (e.g. 📢 CLUB)
+    club_cat = MagicMock(spec=discord.CategoryChannel)
+    club_cat.id = 9001
+    club_cat.name = "📢 CLUB"
+    club_cat.text_channels = []
+
+    # Create a project category with an announcements channel
+    project_cat = MagicMock(spec=discord.CategoryChannel)
+    project_cat.id = 9002
+    project_cat.name = "🚀 PROJECT — AI Assistant"
+    project_cat.text_channels = []
+
+    proj_announcements = MagicMock(spec=discord.TextChannel)
+    proj_announcements.id = 9003
+    proj_announcements.name = "📢・announcements"
+    proj_announcements.category = project_cat
+    proj_announcements.guild = mock_guild
+    proj_announcements.topic = "Project updates"
+    proj_announcements.edit = AsyncMock()
+
+    project_cat.text_channels.append(proj_announcements)
+
+    # Set up mock guild text channels: project channel exists guild-wide, but not in club_cat
+    mock_guild._channels[project_cat.id] = project_cat
+    mock_guild._channels[proj_announcements.id] = proj_announcements
+
+    # Call get_or_create_text_channel for club category
+    created_ch, was_created = await service.get_or_create_text_channel(
+        mock_guild,
+        name="📢・announcements",
+        category=club_cat,
+    )
+
+    # proj_announcements must not have been moved
+    proj_announcements.edit.assert_not_called()
+    assert was_created is True
+    assert created_ch.id != proj_announcements.id
+
