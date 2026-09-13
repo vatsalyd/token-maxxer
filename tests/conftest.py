@@ -19,6 +19,7 @@ from token_maxxer.utils.constants import (
     ROLE_COORDINATOR,
     ROLE_CORE_MEMBER,
     ROLE_MEMBER,
+    ROLE_PROJECT_LEAD,
 )
 
 
@@ -70,11 +71,15 @@ def mock_guild() -> MagicMock:
     member_role.id = 104
     member_role.name = ROLE_MEMBER
 
+    lead_role = MagicMock(spec=discord.Role)
+    lead_role.id = 106
+    lead_role.name = ROLE_PROJECT_LEAD
+
     everyone_role = MagicMock(spec=discord.Role)
     everyone_role.id = guild.id
     everyone_role.name = "@everyone"
 
-    guild.roles = [admin_role, coord_role, core_role, alumni_role, member_role, everyone_role]
+    guild.roles = [admin_role, coord_role, core_role, lead_role, alumni_role, member_role, everyone_role]
     guild.default_role = everyone_role
 
     # bot member in guild
@@ -161,6 +166,10 @@ def mock_guild() -> MagicMock:
         guild.roles.append(r)
         return r
 
+    # Members storage and lookup
+    guild._members = {}
+    guild.get_member.side_effect = lambda uid: guild._members.get(uid)
+
     guild.create_category = AsyncMock(side_effect=create_category)
     guild.create_text_channel = AsyncMock(side_effect=create_text_channel)
     guild.create_role = AsyncMock(side_effect=create_role)
@@ -182,9 +191,24 @@ def make_member(
     member.display_name = name
     member.mention = f"<@{user_id}>"
     member.guild = guild
-    member.roles = roles or []
+    member.roles = list(roles) if roles else []
     member.guild_permissions = MagicMock(spec=discord.Permissions)
     member.guild_permissions.administrator = is_admin
+
+    async def _add_roles(*new_roles: discord.Role, **kwargs: object) -> None:
+        for r in new_roles:
+            if r not in member.roles:
+                member.roles.append(r)
+
+    async def _remove_roles(*del_roles: discord.Role, **kwargs: object) -> None:
+        for r in del_roles:
+            if r in member.roles:
+                member.roles.remove(r)
+
+    member.add_roles = AsyncMock(side_effect=_add_roles)
+    member.remove_roles = AsyncMock(side_effect=_remove_roles)
+    if hasattr(guild, "_members"):
+        guild._members[user_id] = member
     return member
 
 
@@ -201,6 +225,11 @@ def project_service(mock_bot: MagicMock, temp_db: Database) -> ProjectService:
 
 
 @pytest.fixture
-def team_service(mock_bot: MagicMock, temp_db: Database) -> TeamService:
-    """Provide a TeamService wired to the temporary test database."""
-    return TeamService(bot=mock_bot, database=temp_db)
+def team_service(
+    mock_bot: MagicMock,
+    temp_db: Database,
+    permission_service: PermissionService,
+) -> TeamService:
+    """Provide a TeamService wired to the test dependencies."""
+    return TeamService(bot=mock_bot, database=temp_db, permission_service=permission_service)
+

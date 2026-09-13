@@ -10,8 +10,10 @@ from token_maxxer.services.project_service import (
     ProjectService,
     ProjectValidationError,
 )
+from token_maxxer.services.team_service import TeamService
 from token_maxxer.utils.constants import (
     ROLE_ADMIN,
+    ROLE_PROJECT_LEAD,
     ProjectStatus,
 )
 
@@ -67,6 +69,12 @@ async def test_create_project_success(
     assert "team-chat" in workspace.channels
     assert "tasks" in workspace.channels
     assert "work" in workspace.channels
+
+    lead_role = discord.utils.get(mock_guild.roles, name=ROLE_PROJECT_LEAD)
+    assert lead_role is not None
+    lead.add_roles.assert_called_once_with(
+        lead_role, reason="Assigned project lead for Vision Transformer"
+    )
 
 
 @pytest.mark.asyncio
@@ -188,6 +196,11 @@ async def test_archive_project_flow(
     assert archived.archived_at is not None
     workspace.category.edit.assert_called_once()
 
+    lead_role = discord.utils.get(mock_guild.roles, name=ROLE_PROJECT_LEAD)
+    lead.remove_roles.assert_called_once_with(
+        lead_role, reason="No longer leading any active projects"
+    )
+
 
 @pytest.mark.asyncio
 async def test_project_updates_authorization(
@@ -224,3 +237,39 @@ async def test_project_updates_authorization(
         working_on="Phase 2",
     )
     assert upd.completed == "Completed phase 1"
+
+
+@pytest.mark.asyncio
+async def test_transfer_lead_updates_project_lead_role(
+    project_service: ProjectService,
+    team_service: TeamService,
+    mock_guild: discord.Guild,
+) -> None:
+    """Test transferring leadership updates ROLE_PROJECT_LEAD for both members."""
+    lead = make_member(1001, "Alice", mock_guild)
+    new_lead = make_member(1002, "Bob", mock_guild)
+
+    workspace = await project_service.create_project(
+        guild=mock_guild,
+        name="Transfer Test Project",
+        description="Testing lead role transfer",
+        lead=lead,
+    )
+    proj_id = workspace.project.id
+    lead_role = discord.utils.get(mock_guild.roles, name=ROLE_PROJECT_LEAD)
+
+    # Lead initially has the role
+    lead.roles.append(lead_role)
+
+    await team_service.transfer_lead(
+        guild=mock_guild,
+        project_id=proj_id,
+        new_lead=new_lead,
+    )
+
+    new_lead.add_roles.assert_called_once_with(
+        lead_role, reason="Became project lead for Transfer Test Project"
+    )
+    lead.remove_roles.assert_called_once_with(
+        lead_role, reason="No longer leading any active projects"
+    )
